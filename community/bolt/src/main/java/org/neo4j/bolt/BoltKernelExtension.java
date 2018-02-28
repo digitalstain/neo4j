@@ -19,6 +19,9 @@
  */
 package org.neo4j.bolt;
 
+import io.netty.handler.ssl.SslContext;
+import io.netty.util.internal.logging.InternalLoggerFactory;
+
 import java.time.Clock;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,10 +29,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import io.netty.channel.Channel;
-import io.netty.handler.ssl.SslContext;
-import io.netty.util.internal.logging.InternalLoggerFactory;
-
+import org.neo4j.bolt.runtime.BoltConnection;
 import org.neo4j.bolt.runtime.BoltConnectionFactory;
 import org.neo4j.bolt.runtime.BoltSchedulerProvider;
 import org.neo4j.bolt.runtime.CachedThreadPoolExecutorFactory;
@@ -38,7 +38,6 @@ import org.neo4j.bolt.runtime.ExecutorBoltSchedulerProvider;
 import org.neo4j.bolt.security.auth.Authentication;
 import org.neo4j.bolt.security.auth.BasicAuthentication;
 import org.neo4j.bolt.transport.BoltProtocol;
-import org.neo4j.bolt.transport.DefaultBoltProtocolHandlerFactory;
 import org.neo4j.bolt.transport.Netty4LoggerFactory;
 import org.neo4j.bolt.transport.NettyServer;
 import org.neo4j.bolt.transport.NettyServer.ProtocolInitializer;
@@ -149,12 +148,10 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
                 life.add( new ExecutorBoltSchedulerProvider( config, new CachedThreadPoolExecutorFactory( log ), scheduler, logService ) );
         BoltConnectionFactory boltConnectionFactory = createConnectionFactory( boltFactory, boltSchedulerProvider, dependencies, logService, clock );
 
-        DefaultBoltProtocolHandlerFactory handlerFactory = createHandlerFactory( boltConnectionFactory, logService );
-
         if ( !config.enabledBoltConnectors().isEmpty() && !config.get( GraphDatabaseSettings.disconnected ) )
         {
             NettyServer server = new NettyServer( scheduler.threadFactory( boltNetworkIO ),
-                    createConnectors( config, sslPolicyFactory, logService, log, handlerFactory ).values() );
+                    createConnectors( config, sslPolicyFactory, logService, log, boltConnectionFactory ).values() );
             life.add( server );
             log.info( "Bolt Server extension loaded." );
         }
@@ -171,7 +168,7 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
 
     private Map<BoltConnector,ProtocolInitializer> createConnectors( Config config, SslPolicyLoader sslPolicyFactory,
                                                                      LogService logService, Log log,
-                                                                     DefaultBoltProtocolHandlerFactory handlerFactory )
+                                                                     BoltConnectionFactory connectionFactory )
     {
         Map<BoltConnector,ProtocolInitializer> connectors =
                 config.enabledBoltConnectors().stream().collect( Collectors.toMap( Function.identity(), connConfig ->
@@ -208,15 +205,28 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
                             break;
                     }
 
+                    final Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> versions =
+                            newVersions( connConfig.key(), logService, connectionFactory );
 
-                    /**
-                     * HERE - WHAT SHOULD GO HERE?
-                     */
                     return new SocketTransport( connConfig.key(), listenAddress, sslCtx, requireEncryption,
-                            logService.getInternalLogProvider(), handlerFactory );
+                            logService.getInternalLogProvider(), versions );
                 } ) );
 
         return connectors;
+    }
+
+    private Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> newVersions( String connector, LogService logging, BoltConnectionFactory connectionFactory )
+    {
+        Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> availableVersions = new HashMap<>();
+        availableVersions.put(
+                (long) BoltProtocolV1.VERSION,
+                ( channel, isEncrypted ) ->
+                {
+                    BoltConnection connection = connectionFactory.newConnection( channel );
+                    return new BoltProtocolV1( channel, connection, logging );
+                }
+        );
+        return availableVersions;
     }
 
     private SslContext createSslContext( SslPolicyLoader sslPolicyFactory, Config config )
@@ -242,8 +252,4 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
         return new BasicAuthentication( authManager, userManagerSupplier );
     }
 
-    private static DefaultBoltProtocolHandlerFactory createHandlerFactory( BoltConnectionFactory connectionFactory, LogService logService )
-    {
-        return new DefaultBoltProtocolHandlerFactory( connectionFactory, logService );
-    }
 }

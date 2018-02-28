@@ -20,10 +20,12 @@
 package org.neo4j.bolt.v1.runtime;
 
 import java.time.Clock;
+import java.util.Collections;
 import java.util.Map;
 
 import org.neo4j.bolt.security.auth.AuthenticationException;
 import org.neo4j.bolt.security.auth.AuthenticationResult;
+import org.neo4j.kernel.api.security.AuthToken;
 
 import static java.util.Collections.emptyMap;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -44,7 +46,7 @@ public class MachineRoom
 
     public static BoltStateMachine newMachine()
     {
-        return new BoltStateMachine( mock( BoltStateMachineSPI.class, RETURNS_MOCKS ), null, Clock.systemUTC() );
+        return new BoltStateMachine( mock( BoltStateMachineSPI.class, RETURNS_MOCKS ), Clock.systemUTC(), null );
     }
 
     public static BoltStateMachine newMachine( BoltStateMachine.State state ) throws AuthenticationException, BoltConnectionFatality
@@ -78,7 +80,7 @@ public class MachineRoom
         BoltStateMachine.SPI spi = mock( BoltStateMachine.SPI.class, RETURNS_MOCKS );
         when( spi.transactionSpi() ).thenReturn( transactionSPI );
 
-        BoltStateMachine machine = new BoltStateMachine( spi, null, Clock.systemUTC() );
+        BoltStateMachine machine = new BoltStateMachine( spi, Clock.systemUTC(), null );
         init( machine );
         return machine;
     }

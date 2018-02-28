@@ -33,13 +33,12 @@ import java.io.PrintStream;
 import java.io.Serializable;
 import java.rmi.RemoteException;
 
-import org.neo4j.bolt.v1.runtime.WorkerFactory;
+import org.neo4j.bolt.BoltKernelExtension;
 import org.neo4j.graphdb.Transaction;
 import org.neo4j.logging.AssertableLogProvider;
 import org.neo4j.shell.impl.AbstractClient;
 import org.neo4j.shell.kernel.GraphDatabaseShellServer;
 import org.neo4j.test.TestGraphDatabaseFactory;
-import org.neo4j.test.rule.ImpermanentDatabaseRule;
 import org.neo4j.test.rule.SuppressOutput;
 
 import static org.hamcrest.CoreMatchers.containsString;
@@ -53,7 +52,6 @@ import static org.mockito.Matchers.anyMap;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-
 import static org.neo4j.logging.AssertableLogProvider.inLog;
 import static org.neo4j.test.rule.SuppressOutput.suppressAll;
 
@@ -222,7 +220,7 @@ public class StartClientIT extends AbstractShellIT
                 getClass().getResource( "/config-with-bolt-connector.conf" ).getFile()}, mock( CtrlCHandler.class ) );
 
         // Then
-        log.assertNone( inLog( startsWith( WorkerFactory.class.getPackage().getName() ) ).any() );
+        log.assertNone( inLog( startsWith( BoltKernelExtension.class.getPackage().getName() ) ).any() );
     }
 
     private String runAndCaptureOutput( String[] arguments )

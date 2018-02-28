@@ -121,7 +121,7 @@ class SessionRule implements TestRule
         {
             throw new IllegalStateException( "Cannot access test environment before test is running." );
         }
-        BoltStateMachine connection = boltFactory.newMachine( connectionDescriptor, () -> {}, clock );
+        BoltStateMachine connection = boltFactory.newMachine( connectionDescriptor, clock );
         runningMachines.add( connection );
         return connection;
     }

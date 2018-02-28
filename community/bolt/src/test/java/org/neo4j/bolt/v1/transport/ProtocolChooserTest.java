@@ -21,12 +21,16 @@ package org.neo4j.bolt.v1.transport;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import org.neo4j.bolt.BoltChannel;
+import org.neo4j.bolt.logging.BoltMessageLogging;
+import org.neo4j.bolt.logging.NullBoltMessageLogger;
 import org.neo4j.bolt.transport.BoltProtocol;
 import org.neo4j.bolt.transport.HandshakeOutcome;
 import org.neo4j.bolt.transport.ProtocolChooser;
@@ -45,181 +49,179 @@ import static org.neo4j.bolt.transport.HandshakeOutcome.PROTOCOL_CHOSEN;
 
 public class ProtocolChooserTest
 {
-    private final Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> available = new HashMap<>();
+    private final String connector = "default";
+    private final Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> available = new HashMap<>();
     private final BiFunction factory = mock( BiFunction.class );
     private final BoltProtocol protocol = mock( BoltProtocol.class );
-    private final Channel ch = mock(Channel.class);
+    private final ChannelHandlerContext ctx = newChannelHandlerContextMock();
 
     @Test
     public void shouldChooseFirstAvailableProtocol() throws Throwable
     {
-        // Given
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
-        available.put( 1L, factory );
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            // Given
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
+            available.put( 1L, factory );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, false, true );
+            ProtocolChooser chooser = new ProtocolChooser( available, false, true );
 
-        // When
-        HandshakeOutcome outcome =
-                chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                        (byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17,
-                        0, 0, 0, 0,
-                        0, 0, 0, 1,
-                        0, 0, 0, 0,
-                        0, 0, 0, 0} ), ch );
+            // When
+            HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( boltChannel,
+                    wrappedBuffer( new byte[]{(byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0} ) );
 
-        // Then
-        assertThat( outcome, equalTo( PROTOCOL_CHOSEN ) );
-        assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+            // Then
+            assertThat( outcome, equalTo( PROTOCOL_CHOSEN ) );
+            assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+        }
     }
 
     @Test
     public void shouldHandleFragmentedMessage() throws Throwable
     {
-        // Given
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
-        available.put( 1L, factory );
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            // Given
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
+            available.put( 1L, factory );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, false, true );
+            ProtocolChooser chooser = new ProtocolChooser( available, false, true );
 
-        // When
-        HandshakeOutcome firstOutcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                (byte) 0x60, (byte) 0x60} ), ch );
-        // When
-        HandshakeOutcome secondOutcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                (byte) 0xB0, (byte) 0x17 } ), ch );
-        HandshakeOutcome thirdOutcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                0, 0, 0, 0,
-                0, 0, 0} ), ch );
-        HandshakeOutcome fourthOutcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                1,
-                0, 0, 0, 0,
-                0, 0, 0, 0} ), ch );
+            // When
+            HandshakeOutcome firstOutcome = chooser.handleVersionHandshakeChunk( boltChannel, wrappedBuffer( new byte[]{(byte) 0x60, (byte) 0x60} ) );
+            // When
+            HandshakeOutcome secondOutcome = chooser.handleVersionHandshakeChunk( boltChannel, wrappedBuffer( new byte[]{(byte) 0xB0, (byte) 0x17} ) );
+            HandshakeOutcome thirdOutcome = chooser.handleVersionHandshakeChunk( boltChannel, wrappedBuffer( new byte[]{0, 0, 0, 0, 0, 0, 0} ) );
+            HandshakeOutcome fourthOutcome = chooser.handleVersionHandshakeChunk( boltChannel, wrappedBuffer( new byte[]{1, 0, 0, 0, 0, 0, 0, 0, 0} ) );
 
-        // Then
-        assertThat( firstOutcome, equalTo( PARTIAL_HANDSHAKE ) );
-        assertThat( secondOutcome, equalTo( PARTIAL_HANDSHAKE ) );
-        assertThat( thirdOutcome, equalTo( PARTIAL_HANDSHAKE ) );
-        assertThat( fourthOutcome, equalTo( PROTOCOL_CHOSEN ) );
-        assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+            // Then
+            assertThat( firstOutcome, equalTo( PARTIAL_HANDSHAKE ) );
+            assertThat( secondOutcome, equalTo( PARTIAL_HANDSHAKE ) );
+            assertThat( thirdOutcome, equalTo( PARTIAL_HANDSHAKE ) );
+            assertThat( fourthOutcome, equalTo( PROTOCOL_CHOSEN ) );
+            assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+        }
     }
 
     @Test
     public void shouldHandleHandshakeFollowedByMessageInSameBuffer() throws Throwable
     {
-        // Given
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
-        available.put( 1L, factory );
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            // Given
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
+            available.put( 1L, factory );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, false, true );
+            ProtocolChooser chooser = new ProtocolChooser( available, false, true );
 
-        // When
-        ByteBuf buffer = wrappedBuffer( new byte[]{
-                (byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17,
-                0, 0, 0, 0,
-                0, 0, 0, 1,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                1, 2, 3, 4} ); // These last four bytes are not part of the handshake
+            // When
+            ByteBuf buffer = wrappedBuffer(
+                    new byte[]{(byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4} ); // These last four bytes are not part of the handshake
 
-        HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( buffer, ch );
+            HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( boltChannel, buffer );
 
-        // Then
-        assertThat( outcome, equalTo( PROTOCOL_CHOSEN ) );
-        assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
-        assertThat( buffer.readableBytes(), equalTo( 4 ) );
+            // Then
+            assertThat( outcome, equalTo( PROTOCOL_CHOSEN ) );
+            assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+            assertThat( buffer.readableBytes(), equalTo( 4 ) );
+        }
     }
 
     @Test
     public void shouldHandleVersionBoundary() throws Throwable
     {
         // Given
-        long maxUnsignedInt32 = 4_294_967_295L;
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            long maxUnsignedInt32 = 4_294_967_295L;
 
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
-        available.put( maxUnsignedInt32, factory );
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
+            available.put( maxUnsignedInt32, factory );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, false, true );
+            ProtocolChooser chooser = new ProtocolChooser( available, false, true );
 
-        // When
-        HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                (byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17,
-                (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0} ), ch );
+            // When
+            HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( boltChannel, wrappedBuffer(
+                    new byte[]{(byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17, (byte) 0xff, (byte) 0xff, (byte) 0xff, (byte) 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} ) );
 
-        // Then
-        assertThat( outcome, equalTo( PROTOCOL_CHOSEN ) );
-        assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+            // Then
+            assertThat( outcome, equalTo( PROTOCOL_CHOSEN ) );
+            assertThat( chooser.chosenProtocol(), equalTo( protocol ) );
+        }
     }
 
     @Test
     public void shouldFallBackToNoneProtocolIfNoMatch() throws Throwable
     {
-        // Given
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            // Given
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
 
-        available.put( 1L, mock( BiFunction.class ) );
+            available.put( 1L, mock( BiFunction.class ) );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, false, true );
+            ProtocolChooser chooser = new ProtocolChooser( available, false, true );
 
-        // When
-        HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                (byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17,
-                0, 0, 0, 0,
-                0, 0, 0, 2,
-                0, 0, 0, 3,
-                0, 0, 0, 4} ), ch );
+            // When
+            HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( boltChannel,
+                    wrappedBuffer( new byte[]{(byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4} ) );
 
-        // Then
-        assertThat( outcome, equalTo( NO_APPLICABLE_PROTOCOL ) );
-        assertThat( chooser.chosenProtocol(), nullValue() );
+            // Then
+            assertThat( outcome, equalTo( NO_APPLICABLE_PROTOCOL ) );
+            assertThat( chooser.chosenProtocol(), nullValue() );
+        }
     }
 
     @Test
     public void shouldRejectIfInvalidHandshake() throws Throwable
     {
-        // Given
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            // Given
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
 
-        available.put( 1L, mock( BiFunction.class ) );
+            available.put( 1L, mock( BiFunction.class ) );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, false, true );
+            ProtocolChooser chooser = new ProtocolChooser( available, false, true );
 
-        // When
-        HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                (byte) 0xDE, (byte) 0xAD, (byte) 0xB0, (byte) 0x17,
-                0, 0, 0, 1,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0} ), ch );
+            // When
+            HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( boltChannel,
+                    wrappedBuffer( new byte[]{(byte) 0xDE, (byte) 0xAD, (byte) 0xB0, (byte) 0x17, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} ) );
 
-        // Then
-        assertThat( outcome, equalTo( INVALID_HANDSHAKE ) );
-        assertThat( chooser.chosenProtocol(), nullValue() );
+            // Then
+            assertThat( outcome, equalTo( INVALID_HANDSHAKE ) );
+            assertThat( chooser.chosenProtocol(), nullValue() );
+        }
     }
 
     @Test
     public void shouldRejectIfInsecureHandshake() throws Throwable
     {
-        // Given
-        when( factory.apply( ch, true ) ).thenReturn( protocol );
+        try ( BoltChannel boltChannel = BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ) )
+        {
+            // Given
+            when( factory.apply( boltChannel, true ) ).thenReturn( protocol );
 
-        available.put( 1L, mock( BiFunction.class ) );
+            available.put( 1L, mock( BiFunction.class ) );
 
-        ProtocolChooser chooser = new ProtocolChooser( available, true, false );
+            ProtocolChooser chooser = new ProtocolChooser( available, true, false );
 
-        // When
-        HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( wrappedBuffer( new byte[]{
-                (byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17,
-                0, 0, 0, 1,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0} ), ch );
+            // When
+            HandshakeOutcome outcome = chooser.handleVersionHandshakeChunk( boltChannel,
+                    wrappedBuffer( new byte[]{(byte) 0x60, (byte) 0x60, (byte) 0xB0, (byte) 0x17, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} ) );
 
-        // Then
-        assertThat( outcome, equalTo( INSECURE_HANDSHAKE ) );
-        assertThat( chooser.chosenProtocol(), nullValue() );
+            // Then
+            assertThat( outcome, equalTo( INSECURE_HANDSHAKE ) );
+            assertThat( chooser.chosenProtocol(), nullValue() );
+        }
     }
+
+    private static ChannelHandlerContext newChannelHandlerContextMock()
+    {
+        ChannelHandlerContext context = mock( ChannelHandlerContext.class );
+        Channel channel = mock( Channel.class );
+        when( context.channel() ).thenReturn( channel );
+        return context;
+    }
+
 }

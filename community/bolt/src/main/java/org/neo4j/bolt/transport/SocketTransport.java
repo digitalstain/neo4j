@@ -28,6 +28,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.ssl.SslContext;
 
+import org.neo4j.bolt.BoltChannel;
 import org.neo4j.helpers.ListenSocketAddress;
 import org.neo4j.logging.LogProvider;
 
@@ -41,10 +42,10 @@ public class SocketTransport implements NettyServer.ProtocolInitializer
     private final SslContext sslCtx;
     private final boolean encryptionRequired;
     private LogProvider logging;
-    private final Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> protocolVersions;
+    private final Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> protocolVersions;
 
     public SocketTransport( String connector, ListenSocketAddress address, SslContext sslCtx, boolean encryptionRequired, LogProvider logging,
-                            Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> protocolVersions )
+                            Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> protocolVersions )
     {
         this.connector = connector;
         this.address = address;

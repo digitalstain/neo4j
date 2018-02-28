@@ -35,6 +35,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 
+import org.neo4j.bolt.BoltChannel;
 import org.neo4j.logging.LogProvider;
 
 import static org.neo4j.bolt.transport.ProtocolChooser.BOLT_MAGIC_PREAMBLE;
@@ -50,10 +51,10 @@ public class TransportSelectionHandler extends ByteToMessageDecoder
     private final boolean encryptionRequired;
     private final boolean isEncrypted;
     private final LogProvider logging;
-    private final Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> protocolVersions;
+    private final Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> protocolVersions;
 
     TransportSelectionHandler( String connector, SslContext sslCtx, boolean encryptionRequired, boolean isEncrypted, LogProvider logging,
-                               Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> protocolVersions )
+                               Map<Long, BiFunction<BoltChannel, Boolean, BoltProtocol>> protocolVersions )
     {
         this.connector = connector;
         this.sslCtx = sslCtx;
@@ -126,7 +127,7 @@ public class TransportSelectionHandler extends ByteToMessageDecoder
     {
         ChannelPipeline p = ctx.pipeline();
         p.addLast( new SocketTransportHandler(
-                new ProtocolChooser( protocolVersions, encryptionRequired, isEncrypted ), logging ) );
+                connector, new ProtocolChooser( protocolVersions, encryptionRequired, isEncrypted ), logging ) );
         p.remove( this );
     }
 
@@ -140,7 +141,7 @@ public class TransportSelectionHandler extends ByteToMessageDecoder
                 new WebSocketFrameAggregator( MAX_WEBSOCKET_FRAME_SIZE ),
                 new WebSocketFrameTranslator(),
                 new SocketTransportHandler(
-                        new ProtocolChooser( protocolVersions, encryptionRequired, isEncrypted ), logging ) );
+                        connector, new ProtocolChooser( protocolVersions, encryptionRequired, isEncrypted ), logging ) );
         p.remove( this );
     }
 }

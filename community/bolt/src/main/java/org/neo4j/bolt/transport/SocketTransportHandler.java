@@ -23,6 +23,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 
+import org.neo4j.bolt.BoltChannel;
+import org.neo4j.bolt.logging.NullBoltMessageLogger;
 import org.neo4j.logging.Log;
 import org.neo4j.logging.LogProvider;
 
@@ -36,13 +38,15 @@ import static io.netty.buffer.Unpooled.wrappedBuffer;
  */
 public class SocketTransportHandler extends ChannelInboundHandlerAdapter
 {
+    private final String connector;
     private final ProtocolChooser protocolChooser;
     private final Log log;
 
     private BoltProtocol protocol;
 
-    public SocketTransportHandler( ProtocolChooser protocolChooser, LogProvider logging )
+    public SocketTransportHandler( String connector, ProtocolChooser protocolChooser, LogProvider logging )
     {
+        this.connector = connector;
         this.protocolChooser = protocolChooser;
         this.log = logging.getLog( getClass() );
     }
@@ -55,7 +59,7 @@ public class SocketTransportHandler extends ChannelInboundHandlerAdapter
             ByteBuf buffer = (ByteBuf) msg;
             if ( protocol == null )
             {
-                chooseProtocolVersion( ctx, buffer );
+                chooseProtocolVersion( BoltChannel.open( connector, ctx, NullBoltMessageLogger.getInstance() ), buffer );
             }
             else
             {
@@ -104,9 +108,10 @@ public class SocketTransportHandler extends ChannelInboundHandlerAdapter
         }
     }
 
-    private void chooseProtocolVersion( ChannelHandlerContext ctx, ByteBuf buffer ) throws Exception
+    private void chooseProtocolVersion( BoltChannel boltChannel, ByteBuf buffer ) throws Exception
     {
-        HandshakeOutcome outcome = protocolChooser.handleVersionHandshakeChunk( buffer, ctx.channel() );
+        ChannelHandlerContext ctx = boltChannel.channelHandlerContext();
+        HandshakeOutcome outcome = protocolChooser.handleVersionHandshakeChunk( boltChannel, buffer );
         switch ( outcome )
         {
         case PROTOCOL_CHOSEN:

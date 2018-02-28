@@ -27,6 +27,8 @@ import java.nio.ByteOrder;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import org.neo4j.bolt.BoltChannel;
+
 /**
  * Manages the state for choosing the protocol version to use.
  * The protocol opens with the client sending four bytes (0x6060 B017) followed by four suggested protocol
@@ -40,7 +42,7 @@ public class ProtocolChooser
 {
     public static final int BOLT_MAGIC_PREAMBLE = 0x6060B017;
 
-    private final Map<Long,BiFunction<Channel,Boolean,BoltProtocol>> availableVersions;
+    private final Map<Long,BiFunction<BoltChannel,Boolean,BoltProtocol>> availableVersions;
     private final boolean encryptionRequired;
     private final boolean isEncrypted;
     private final ByteBuffer handShake = ByteBuffer.allocate( 5 * 4 ).order( ByteOrder.BIG_ENDIAN );
@@ -52,7 +54,7 @@ public class ProtocolChooser
      * @param encryptionRequired whether or not the server allows only encrypted connections
      * @param isEncrypted whether of not this connection is encrypted
      */
-    public ProtocolChooser( Map<Long,BiFunction<Channel,Boolean,BoltProtocol>> availableVersions,
+    public ProtocolChooser( Map<Long,BiFunction<BoltChannel,Boolean,BoltProtocol>> availableVersions,
             boolean encryptionRequired, boolean isEncrypted )
     {
         this.availableVersions = availableVersions;
@@ -60,7 +62,7 @@ public class ProtocolChooser
         this.isEncrypted = isEncrypted;
     }
 
-    public HandshakeOutcome handleVersionHandshakeChunk( ByteBuf buffer, Channel ch )
+    public HandshakeOutcome handleVersionHandshakeChunk( BoltChannel boltChannel, ByteBuf buffer )
     {
         if ( encryptionRequired && !isEncrypted )
         {
@@ -92,7 +94,7 @@ public class ProtocolChooser
                     long suggestion = handShake.getInt() & 0xFFFFFFFFL;
                     if ( availableVersions.containsKey( suggestion ) )
                     {
-                        protocol = availableVersions.get( suggestion ).apply( ch, isEncrypted );
+                        protocol = availableVersions.get( suggestion ).apply( boltChannel, isEncrypted );
                         return HandshakeOutcome.PROTOCOL_CHOSEN;
                     }
                 }

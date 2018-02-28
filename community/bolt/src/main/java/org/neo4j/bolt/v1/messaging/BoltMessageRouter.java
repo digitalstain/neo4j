@@ -43,8 +43,8 @@ public class BoltMessageRouter implements BoltRequestMessageHandler<RuntimeExcep
 
     private BoltConnection connection;
 
-    public BoltMessageRouter( Log log, BoltResponseMessageHandler<IOException> output,
-                              BoltConnection connection, Runnable onEachCompletedRequest )
+    public BoltMessageRouter( Log log, BoltConnection connection,
+            BoltResponseMessageHandler<IOException> output, Runnable onEachCompletedRequest )
     {
         this.initHandler = new InitHandler( output, onEachCompletedRequest, connection, log );
         this.runHandler = new RunHandler( output, onEachCompletedRequest, connection, log );

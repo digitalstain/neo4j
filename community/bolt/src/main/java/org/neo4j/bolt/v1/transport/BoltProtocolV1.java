@@ -104,7 +104,7 @@ public class BoltProtocolV1 implements BoltProtocol
 
     private BoltV1Dechunker createDechunker( BoltResponseMessageWriter responseHandler, Log log )
     {
-        BoltMessageRouter bridge = new BoltMessageRouter( log, responseHandler, boltConnection, this::onMessageDone );
+        BoltMessageRouter bridge = new BoltMessageRouter( log, boltConnection, responseHandler, this::onMessageDone );
         return new BoltV1Dechunker( bridge, this::onMessageStarted );
     }
 

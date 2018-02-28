@@ -29,6 +29,7 @@ import org.neo4j.bolt.v1.runtime.spi.BoltResult;
 import org.neo4j.graphdb.TransactionFailureException;
 import org.neo4j.graphdb.security.AuthorizationExpiredException;
 import org.neo4j.kernel.api.exceptions.Status;
+import org.neo4j.kernel.impl.logging.NullLogService;
 
 import static java.util.Collections.emptyMap;
 import static org.hamcrest.CoreMatchers.notNullValue;
@@ -494,7 +495,7 @@ public class BoltStateMachineTest
     {
         // Given
         BoltStateMachineSPI spi = mock( BoltStateMachineSPI.class, RETURNS_MOCKS );
-        final BoltStateMachine machine = new BoltStateMachine( spi, null, Clock.systemUTC(), NullLogService.getInstance() );
+        final BoltStateMachine machine = new BoltStateMachine( spi, Clock.systemUTC(), NullLogService.getInstance() );
 
         // When
         machine.close();

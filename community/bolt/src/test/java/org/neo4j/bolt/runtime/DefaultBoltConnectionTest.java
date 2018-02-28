@@ -47,8 +47,8 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Matchers.anyCollection;
+import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -60,7 +60,7 @@ public class DefaultBoltConnectionTest
 {
     private final String connector = "default";
     private final AssertableLogProvider logProvider = new AssertableLogProvider();
-    private final LogService logService = new SimpleLogService( logProvider );
+    private final LogService logService = new SimpleLogService( logProvider, logProvider );
     private final BoltConnectionLifetimeListener connectionListener = mock( BoltConnectionLifetimeListener.class );
     private final BoltConnectionQueueMonitor queueMonitor = mock( BoltConnectionQueueMonitor.class );
     private final EmbeddedChannel channel = new EmbeddedChannel();
@@ -192,7 +192,7 @@ public class DefaultBoltConnectionTest
         List<Job> drainedJobs = new ArrayList<>();
         Job job = machine -> doNothing();
         BoltConnection connection = newConnection();
-        doAnswer( inv -> drainedJobs.addAll( (Collection<Job>)inv.getArgument( 1 ) ) ).when( queueMonitor ).drained( same( connection ), anyCollection() );
+        doAnswer( inv -> drainedJobs.addAll( (Collection<Job>)inv.getArgumentAt( 1, Collection.class ) ) ).when( queueMonitor ).drained( same( connection ), anyCollection() );
 
         connection.enqueue( job );
         connection.processNextBatch();
@@ -207,7 +207,7 @@ public class DefaultBoltConnectionTest
         List<Job> drainedJobs = new ArrayList<>();
         List<Job> pushedJobs = new ArrayList<>();
         BoltConnection connection = newConnection( 10 );
-        doAnswer( inv -> drainedJobs.addAll( (Collection<Job>)inv.getArgument( 1 ) ) ).when( queueMonitor ).drained( same( connection ), anyCollection() );
+        doAnswer( inv -> drainedJobs.addAll( (Collection<Job>)inv.getArgumentAt( 1, Collection.class ) ) ).when( queueMonitor ).drained( same( connection ), anyCollection() );
 
         for ( int i = 0; i < 15; i++ )
         {

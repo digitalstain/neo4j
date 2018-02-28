@@ -29,14 +29,17 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import org.neo4j.bolt.BoltChannel;
+import org.neo4j.bolt.logging.BoltMessageLogging;
+import org.neo4j.bolt.runtime.SynchronousBoltConnection;
 import org.neo4j.bolt.transport.BoltProtocol;
 import org.neo4j.bolt.transport.ProtocolChooser;
 import org.neo4j.bolt.transport.SocketTransportHandler;
 import org.neo4j.bolt.v1.runtime.BoltStateMachine;
-import org.neo4j.bolt.v1.runtime.SynchronousBoltWorker;
 import org.neo4j.bolt.v1.transport.BoltProtocolV1;
 import org.neo4j.kernel.impl.logging.NullLogService;
 import org.neo4j.logging.AssertableLogProvider;
+import org.neo4j.logging.LogProvider;
 import org.neo4j.logging.NullLogProvider;
 
 import static org.hamcrest.Matchers.equalTo;
@@ -127,7 +130,7 @@ public class SocketTransportHandlerTest
         ChannelHandlerContext ctx = channelHandlerContextMock();
         AssertableLogProvider logging = new AssertableLogProvider();
 
-        SocketTransportHandler handler = new SocketTransportHandler( protocolChooser( machine ), logging );
+        SocketTransportHandler handler = new SocketTransportHandler( CONNECTOR, protocolChooser( machine ), logging );
 
         // And Given a session has been established
         handler.channelRead( ctx, handshake() );
@@ -148,7 +151,7 @@ public class SocketTransportHandlerTest
         // Given
         ChannelHandlerContext context = mock( ChannelHandlerContext.class );
         AssertableLogProvider logging = new AssertableLogProvider();
-        SocketTransportHandler handler = new SocketTransportHandler( mock( ProtocolChooser.class ), logging );
+        SocketTransportHandler handler = new SocketTransportHandler( CONNECTOR, mock( ProtocolChooser.class ), logging );
 
         // When
         Throwable cause = new Throwable( "Oh no!" );
@@ -168,7 +171,7 @@ public class SocketTransportHandlerTest
         ProtocolChooser chooser = protocolChooser( machine );
         ChannelHandlerContext context = channelHandlerContextMock();
 
-        SocketTransportHandler handler = new SocketTransportHandler( chooser, NullLogProvider.getInstance() );
+        SocketTransportHandler handler = new SocketTransportHandler( CONNECTOR, chooser, NullLogProvider.getInstance() );
 
         handler.channelRead( context, handshake() );
         BoltProtocol protocol1 = chooser.chosenProtocol();
@@ -181,7 +184,7 @@ public class SocketTransportHandlerTest
 
     private static SocketTransportHandler newSocketTransportHandler( ProtocolChooser protocolChooser )
     {
-        return new SocketTransportHandler( protocolChooser, NullLogProvider.getInstance() );
+        return new SocketTransportHandler( CONNECTOR, protocolChooser, NullLogProvider.getInstance() );
     }
 
     private static ChannelHandlerContext channelHandlerContextMock()
@@ -198,9 +201,9 @@ public class SocketTransportHandlerTest
 
     private ProtocolChooser protocolChooser( final BoltStateMachine machine )
     {
-        Map<Long,BiFunction<Channel,Boolean,BoltProtocol>> availableVersions = new HashMap<>();
+        Map<Long,BiFunction<BoltChannel,Boolean,BoltProtocol>> availableVersions = new HashMap<>();
         availableVersions.put( (long) BoltProtocolV1.VERSION,
-                ( channel, isSecure ) -> new BoltProtocolV1( new SynchronousBoltWorker( machine ), channel,
+                ( channel, isSecure ) -> new BoltProtocolV1( channel, new SynchronousBoltConnection( machine ),
                         NullLogService.getInstance() )
         );
 

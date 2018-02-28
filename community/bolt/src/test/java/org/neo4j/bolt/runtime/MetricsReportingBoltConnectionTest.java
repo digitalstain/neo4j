@@ -32,7 +32,7 @@ import org.neo4j.bolt.v1.runtime.Job;
 import org.neo4j.kernel.impl.logging.NullLogService;
 import org.neo4j.time.Clocks;
 
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;

@@ -29,9 +29,10 @@ import org.mockito.stubbing.Answer;
 import java.io.IOException;
 import java.util.Objects;
 
+import org.neo4j.bolt.BoltChannel;
+import org.neo4j.bolt.runtime.BoltConnection;
+import org.neo4j.bolt.runtime.SynchronousBoltConnection;
 import org.neo4j.bolt.v1.runtime.BoltStateMachine;
-import org.neo4j.bolt.v1.runtime.BoltWorker;
-import org.neo4j.bolt.v1.runtime.SynchronousBoltWorker;
 import org.neo4j.kernel.impl.logging.NullLogService;
 import org.neo4j.kernel.impl.logging.SimpleLogService;
 import org.neo4j.logging.AssertableLogProvider;
@@ -55,10 +56,12 @@ public class BoltProtocolV1Test
     {
         // Given
         Channel outputChannel = newChannelMock();
+        BoltChannel boltChannel = mock( BoltChannel.class );
+        when( boltChannel.rawChannel() ).thenReturn( outputChannel );
 
         BoltStateMachine machine = mock( BoltStateMachine.class );
-        BoltProtocolV1 protocol = new BoltProtocolV1( new SynchronousBoltWorker( machine ),
-                outputChannel, NullLogService.getInstance() );
+        BoltProtocolV1 protocol = new BoltProtocolV1( boltChannel, new SynchronousBoltConnection( machine ),
+                NullLogService.getInstance() );
         verify( outputChannel ).alloc();
 
         // And given inbound data that'll explode when the protocol tries to interpret it
@@ -86,8 +89,11 @@ public class BoltProtocolV1Test
 
         BoltStateMachine machine = mock( BoltStateMachine.class );
 
-        BoltProtocolV1 protocol = new BoltProtocolV1( new SynchronousBoltWorker( machine ),
-                outputChannel, NullLogService.getInstance() );
+        BoltChannel boltChannel = mock( BoltChannel.class );
+        when( boltChannel.rawChannel() ).thenReturn( outputChannel );
+
+        BoltProtocolV1 protocol = new BoltProtocolV1( boltChannel, new SynchronousBoltConnection( machine ),
+                NullLogService.getInstance() );
         protocol.close();
 
         verify( machine ).close();
@@ -103,7 +109,11 @@ public class BoltProtocolV1Test
         AssertableLogProvider assertableLogProvider = new AssertableLogProvider();
         SimpleLogService logService = new SimpleLogService( NullLogProvider.getInstance(), assertableLogProvider );
 
-        BoltProtocolV1 protocol = new BoltProtocolV1( mock( BoltWorker.class ), newChannelMock(), logService );
+        Channel outputChannel = newChannelMock();
+        BoltChannel boltChannel = mock( BoltChannel.class );
+        when( boltChannel.rawChannel() ).thenReturn( outputChannel );
+
+        BoltProtocolV1 protocol = new BoltProtocolV1( boltChannel, mock( BoltConnection.class ), logService );
 
         protocol.handle( mock( ChannelHandlerContext.class ), data );
 
