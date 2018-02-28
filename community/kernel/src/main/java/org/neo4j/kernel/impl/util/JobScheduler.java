@@ -98,8 +98,6 @@ public interface JobScheduler extends Lifecycle
      */
     class Groups
     {
-        /** Session workers, these perform the work of actually executing client queries.  */
-        public static final Group sessionWorker = new Group( "Session", NEW_THREAD );
 
         /** Background index population */
         public static final Group indexPopulation = new Group( "IndexPopulation", POOLED );

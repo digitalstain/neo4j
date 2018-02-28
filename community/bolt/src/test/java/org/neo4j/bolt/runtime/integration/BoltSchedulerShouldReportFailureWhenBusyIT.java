@@ -85,7 +85,7 @@ public class BoltSchedulerShouldReportFailureWhenBusyIT
     public Factory<TransportConnection> cf;
 
     @Parameterized.Parameter( 1 )
-    private HostnamePort address;
+    public HostnamePort address;
 
     @Parameterized.Parameters
     public static Collection<Object[]> transports()
@@ -123,7 +123,7 @@ public class BoltSchedulerShouldReportFailureWhenBusyIT
         {
             settings.put( GraphDatabaseSettings.auth_enabled.name(), "false" );
             settings.put( new BoltConnector( "bolt" ).enabled.name(), "TRUE" );
-            settings.put( new BoltConnector( "bolt" ).listen_address.name(), "localhost:0" );
+            settings.put( new BoltConnector( "bolt" ).listen_address.name(), "localhost:7687" );
             settings.put( new BoltConnector( "bolt" ).type.name(), BoltConnector.ConnectorType.BOLT.name() );
             settings.put( new BoltConnector( "bolt" ).thread_pool_core_size.name(), "0" );
             settings.put( new BoltConnector( "bolt" ).thread_pool_max_size.name(), "2" );

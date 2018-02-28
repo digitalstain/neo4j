@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.time.Clock;
 import java.util.Collections;
 
+import org.neo4j.bolt.BoltChannel;
 import org.neo4j.bolt.testing.BoltResponseRecorder;
 import org.neo4j.bolt.v1.runtime.spi.BoltResult;
 import org.neo4j.graphdb.TransactionFailureException;
@@ -495,7 +496,8 @@ public class BoltStateMachineTest
     {
         // Given
         BoltStateMachineSPI spi = mock( BoltStateMachineSPI.class, RETURNS_MOCKS );
-        final BoltStateMachine machine = new BoltStateMachine( spi, Clock.systemUTC(), NullLogService.getInstance() );
+        BoltChannel boltChannel = mock( BoltChannel.class );
+        final BoltStateMachine machine = new BoltStateMachine( spi, boltChannel, Clock.systemUTC(), NullLogService.getInstance() );
 
         // When
         machine.close();

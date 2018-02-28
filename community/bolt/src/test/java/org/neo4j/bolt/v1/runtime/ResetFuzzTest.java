@@ -94,7 +94,7 @@ public class ResetFuzzTest
         new ExecutorBoltSchedulerProvider( createConfig(), new CachedThreadPoolExecutorFactory( NullLog.getInstance() ), scheduler,
                 NullLogService.getInstance() ) );
     private final Clock clock = Clock.systemUTC();
-    private final BoltStateMachine machine = new BoltStateMachine( new FuzzStubSPI(), clock, NullLogService.getInstance() );
+    private final BoltStateMachine machine = new BoltStateMachine( new FuzzStubSPI(), mock( BoltChannel.class ), clock, NullLogService.getInstance() );
     private final BoltConnectionFactory connectionFactory =
             new DefaultBoltConnectionFactory( ( boltChannel, clock ) -> machine, boltSchedulerProvider, NullLogService.getInstance(), clock, null, monitors );
     private BoltChannel boltChannel;

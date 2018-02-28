@@ -22,6 +22,7 @@ package org.neo4j.bolt.v1.runtime;
 import java.time.Clock;
 import java.time.Duration;
 
+import org.neo4j.bolt.BoltChannel;
 import org.neo4j.bolt.security.auth.Authentication;
 import org.neo4j.graphdb.DependencyResolver;
 import org.neo4j.graphdb.factory.GraphDatabaseSettings;
@@ -82,12 +83,12 @@ public class BoltFactoryImpl extends LifecycleAdapter implements BoltFactory
     }
 
     @Override
-    public BoltStateMachine newMachine( BoltConnectionDescriptor connectionDescriptor, Clock clock )
+    public BoltStateMachine newMachine( BoltChannel boltChannel, Clock clock )
     {
         TransactionStateMachine.SPI transactionSPI = createTxSpi( clock );
-        BoltStateMachine.SPI boltSPI = new BoltStateMachineSPI( connectionDescriptor, usageData,
+        BoltStateMachine.SPI boltSPI = new BoltStateMachineSPI( boltChannel, usageData,
                 logging, authentication, connectionTracker, transactionSPI );
-        return new BoltStateMachine( boltSPI, clock, logging);
+        return new BoltStateMachine( boltSPI, boltChannel,  clock, logging);
     }
 
     private TransactionStateMachine.SPI createTxSpi( Clock clock )
