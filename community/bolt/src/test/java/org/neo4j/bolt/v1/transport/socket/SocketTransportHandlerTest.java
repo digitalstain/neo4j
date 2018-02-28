@@ -49,6 +49,10 @@ import static org.neo4j.logging.AssertableLogProvider.inLog;
 
 public class SocketTransportHandlerTest
 {
+    private static final String CONNECTOR = "default";
+    private static final LogProvider LOG_PROVIDER = NullLogProvider.getInstance();
+    private static final BoltMessageLogging BOLT_LOGGING = BoltMessageLogging.none();
+
     @Test
     public void shouldCloseProtocolOnChannelInactive() throws Throwable
     {

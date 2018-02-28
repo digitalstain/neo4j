@@ -82,12 +82,12 @@ public class BoltFactoryImpl extends LifecycleAdapter implements BoltFactory
     }
 
     @Override
-    public BoltStateMachine newMachine( BoltConnectionDescriptor connectionDescriptor, Runnable onClose, Clock clock )
+    public BoltStateMachine newMachine( BoltConnectionDescriptor connectionDescriptor, Clock clock )
     {
         TransactionStateMachine.SPI transactionSPI = createTxSpi( clock );
         BoltStateMachine.SPI boltSPI = new BoltStateMachineSPI( connectionDescriptor, usageData,
                 logging, authentication, connectionTracker, transactionSPI );
-        return new BoltStateMachine( boltSPI, onClose, clock );
+        return new BoltStateMachine( boltSPI, clock, logging);
     }
 
     private TransactionStateMachine.SPI createTxSpi( Clock clock )

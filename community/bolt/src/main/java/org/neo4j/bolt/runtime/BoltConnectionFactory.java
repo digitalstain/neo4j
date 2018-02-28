@@ -17,25 +17,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.bolt.v1.runtime;
+package org.neo4j.bolt.runtime;
 
-import org.neo4j.kernel.lifecycle.Lifecycle;
+import org.neo4j.bolt.BoltChannel;
 
-/**
- * Creates {@link BoltWorker}s. Implementations of this interface can decorate queues and their jobs
- * to monitor activity and enforce constraints.
- */
-public interface WorkerFactory extends Lifecycle
+public interface BoltConnectionFactory
 {
-    default BoltWorker newWorker( BoltConnectionDescriptor connectionDescriptor )
-    {
-        return newWorker( connectionDescriptor, null );
-    }
-
     /**
-     * @param connectionDescriptor describes the underlying medium (TCP, HTTP, ...)
-     * @param onClose              callback for closing the underlying connection in case of protocol violation.
-     * @return a new job queue
+     * Create a new connection bound to the specified channel
+     *
+     * @param channel the underlying channel
+     * @return the newly created connection instance
      */
-    BoltWorker newWorker( BoltConnectionDescriptor connectionDescriptor, Runnable onClose );
+    BoltConnection newConnection( BoltChannel channel );
+
 }

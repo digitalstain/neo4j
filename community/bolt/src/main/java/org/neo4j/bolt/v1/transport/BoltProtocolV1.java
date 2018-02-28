@@ -23,14 +23,14 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 
+import org.neo4j.bolt.BoltChannel;
+import org.neo4j.bolt.runtime.BoltConnection;
 import org.neo4j.bolt.transport.BoltProtocol;
 import org.neo4j.bolt.v1.messaging.BoltMessageRouter;
 import org.neo4j.bolt.v1.messaging.BoltResponseMessageWriter;
 import org.neo4j.bolt.v1.messaging.Neo4jPack;
-import org.neo4j.bolt.v1.runtime.BoltWorker;
 import org.neo4j.kernel.impl.logging.LogService;
 import org.neo4j.logging.Log;
 
@@ -50,19 +50,18 @@ public class BoltProtocolV1 implements BoltProtocol
     private final BoltResponseMessageWriter packer;
     private final BoltV1Dechunker dechunker;
 
-    private final BoltWorker worker;
-
     private final AtomicInteger inFlight = new AtomicInteger( 0 );
 
+    private final BoltConnection boltConnection;
     private final Log log;
 
-    public BoltProtocolV1( BoltWorker worker, Channel outputChannel, LogService logging )
+    public BoltProtocolV1( BoltChannel boltChannel, BoltConnection boltConnection, LogService logging )
     {
+        this.boltConnection = boltConnection;
         this.log = logging.getInternalLog( getClass() );
-        this.chunkedOutput = new ChunkedOutput( outputChannel, DEFAULT_OUTPUT_BUFFER_SIZE, log );
+        this.chunkedOutput = new ChunkedOutput( boltChannel.rawChannel(), DEFAULT_OUTPUT_BUFFER_SIZE, log );
         this.packer = new BoltResponseMessageWriter( new Neo4jPack.Packer( chunkedOutput ), chunkedOutput );
-        this.worker = worker;
-        this.dechunker = createDechunker( packer, worker, log );
+        this.dechunker = createDechunker( packer, log );
     }
 
     /**
@@ -81,7 +80,7 @@ public class BoltProtocolV1 implements BoltProtocol
         catch ( Throwable t )
         {
             log.error( "Failed to handle incoming Bolt message. Connection will be closed.", t );
-            worker.halt();
+            boltConnection.stop();
         }
         finally
         {
@@ -99,13 +98,13 @@ public class BoltProtocolV1 implements BoltProtocol
     public synchronized void close()
     {
         dechunker.close();
-        worker.halt();
+        boltConnection.stop();
         chunkedOutput.close();
     }
 
-    private BoltV1Dechunker createDechunker( BoltResponseMessageWriter responseHandler, BoltWorker boltWorker, Log log )
+    private BoltV1Dechunker createDechunker( BoltResponseMessageWriter responseHandler, Log log )
     {
-        BoltMessageRouter bridge = new BoltMessageRouter( log, boltWorker, responseHandler, this::onMessageDone );
+        BoltMessageRouter bridge = new BoltMessageRouter( log, responseHandler, boltConnection, this::onMessageDone );
         return new BoltV1Dechunker( bridge, this::onMessageStarted );
     }
 

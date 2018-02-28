@@ -21,20 +21,13 @@ package org.neo4j.bolt.v1.runtime;
 
 import java.net.SocketAddress;
 
-public class BoltConnectionDescriptor
+public interface BoltConnectionDescriptor
 {
-    final SocketAddress clientAddress;
-    final SocketAddress serverAddress;
+    String id();
 
-    public BoltConnectionDescriptor( SocketAddress clientAddress, SocketAddress serverAddress )
-    {
-        this.clientAddress = clientAddress;
-        this.serverAddress = serverAddress;
-    }
+    String connector();
 
-    @Override
-    public String toString()
-    {
-        return String.format("Server: %s - Client: %s", serverAddress, clientAddress );
-    }
+    SocketAddress clientAddress();
+
+    SocketAddress serverAddress();
 }

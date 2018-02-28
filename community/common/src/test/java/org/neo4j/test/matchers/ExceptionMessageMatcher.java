@@ -17,25 +17,31 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.bolt.v1.runtime;
+package org.neo4j.test.matchers;
 
-public interface BoltWorker
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeMatcher;
+
+public class ExceptionMessageMatcher extends TypeSafeMatcher<Throwable>
 {
-    /**
-     * Add a new job to the job queue.
-     *
-     * @param job the {@link Job} to add
-     */
-    void enqueue( Job job );
+    private final Matcher<? super String> matcher;
 
-    /**
-     * Interrupt and stop the current action but remain open for new actions.
-     */
-    void interrupt();
+    public ExceptionMessageMatcher( Matcher<? super String> matcher )
+    {
+        this.matcher = matcher;
+    }
 
-    /**
-     * Shut down the worker.
-     */
-    void halt();
+    @Override
+    protected boolean matchesSafely( Throwable throwable )
+    {
+        return matcher.matches( throwable.getMessage() );
+    }
+
+    @Override
+    public void describeTo( Description description )
+    {
+        description.appendText( "expect message to be " ).appendDescriptionOf( matcher );
+    }
 
 }

@@ -17,30 +17,29 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.bolt.v1.runtime;
+package org.neo4j.logging;
 
-import org.neo4j.bolt.v1.runtime.spi.BoltResult;
-import org.neo4j.function.ThrowingConsumer;
-import org.neo4j.kernel.api.exceptions.KernelException;
-import org.neo4j.kernel.api.exceptions.TransactionFailureException;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 
-import java.util.Map;
-
-public interface StatementProcessor
+public enum LogTimeZone
 {
-    StatementMetadata run( String statement, Map<String, Object> params ) throws KernelException;
+    UTC
+            {
+                @Override
+                public ZoneId getZoneId()
+                {
+                    return ZoneOffset.UTC;
+                }
+            },
+    SYSTEM
+            {
+                @Override
+                public ZoneId getZoneId()
+                {
+                    return ZoneId.systemDefault();
+                }
+            };
 
-    void streamResult( ThrowingConsumer<BoltResult, Exception> resultConsumer ) throws Exception;
-
-    void reset() throws TransactionFailureException;
-
-    void markCurrentTransactionForTermination();
-
-    boolean hasTransaction();
-
-    boolean hasOpenStatement();
-
-    void validateTransaction() throws KernelException;
-
-    void setQuerySource( BoltQuerySource querySource );
+    public abstract ZoneId getZoneId();
 }

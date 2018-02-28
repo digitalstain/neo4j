@@ -21,35 +21,39 @@ package org.neo4j.bolt;
 
 import java.time.Clock;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import io.netty.channel.Channel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 
+import org.neo4j.bolt.runtime.BoltConnectionFactory;
+import org.neo4j.bolt.runtime.BoltSchedulerProvider;
+import org.neo4j.bolt.runtime.CachedThreadPoolExecutorFactory;
+import org.neo4j.bolt.runtime.DefaultBoltConnectionFactory;
+import org.neo4j.bolt.runtime.ExecutorBoltSchedulerProvider;
 import org.neo4j.bolt.security.auth.Authentication;
 import org.neo4j.bolt.security.auth.BasicAuthentication;
 import org.neo4j.bolt.transport.BoltProtocol;
+import org.neo4j.bolt.transport.DefaultBoltProtocolHandlerFactory;
 import org.neo4j.bolt.transport.Netty4LoggerFactory;
 import org.neo4j.bolt.transport.NettyServer;
 import org.neo4j.bolt.transport.NettyServer.ProtocolInitializer;
 import org.neo4j.bolt.transport.SocketTransport;
-import org.neo4j.bolt.v1.runtime.BoltConnectionDescriptor;
 import org.neo4j.bolt.v1.runtime.BoltFactory;
 import org.neo4j.bolt.v1.runtime.BoltFactoryImpl;
-import org.neo4j.bolt.v1.runtime.BoltWorker;
-import org.neo4j.bolt.v1.runtime.MonitoredWorkerFactory;
-import org.neo4j.bolt.v1.runtime.WorkerFactory;
-import org.neo4j.bolt.v1.runtime.concurrent.ThreadedWorkerFactory;
 import org.neo4j.bolt.v1.transport.BoltProtocolV1;
 import org.neo4j.configuration.Description;
+import org.neo4j.configuration.LoadableConfig;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.config.Setting;
 import org.neo4j.graphdb.factory.GraphDatabaseSettings;
 import org.neo4j.helpers.ListenSocketAddress;
 import org.neo4j.helpers.Service;
+import org.neo4j.io.fs.FileSystemAbstraction;
 import org.neo4j.kernel.api.bolt.BoltConnectionTracker;
 import org.neo4j.kernel.api.security.AuthManager;
 import org.neo4j.kernel.api.security.UserManagerSupplier;
@@ -69,7 +73,6 @@ import org.neo4j.logging.Log;
 import org.neo4j.udc.UsageData;
 
 import static java.lang.String.format;
-import static java.util.stream.Collectors.toList;
 import static org.neo4j.kernel.configuration.Settings.STRING;
 import static org.neo4j.kernel.configuration.Settings.setting;
 import static org.neo4j.kernel.configuration.ssl.LegacySslPolicyConfig.LEGACY_POLICY_NAME;
@@ -81,9 +84,9 @@ import static org.neo4j.kernel.impl.util.JobScheduler.Groups.boltNetworkIO;
 @Service.Implementation( KernelExtensionFactory.class )
 public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtension.Dependencies>
 {
-    public static class Settings
+    public static class Settings implements LoadableConfig
     {
-        @Description( "SSL policy to use" )
+        @Description( "Specify the SSL policy to use" )
         public static Setting<String> ssl_policy = setting( "bolt.ssl_policy", STRING, LEGACY_POLICY_NAME );
     }
 
@@ -112,6 +115,8 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
         UserManagerSupplier userManagerSupplier();
 
         SslPolicyLoader sslPolicyFactory();
+
+        FileSystemAbstraction fileSystem();
     }
 
     public BoltKernelExtension()
@@ -120,7 +125,7 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
     }
 
     @Override
-    public Lifecycle newInstance( KernelContext context, Dependencies dependencies ) throws Throwable
+    public Lifecycle newInstance( KernelContext context, Dependencies dependencies )
     {
         Config config = dependencies.config();
         GraphDatabaseService gdb = dependencies.db();
@@ -128,7 +133,7 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
         LogService logService = dependencies.logService();
         Clock clock = dependencies.clock();
         SslPolicyLoader sslPolicyFactory = dependencies.sslPolicyFactory();
-        Log log = logService.getInternalLog( WorkerFactory.class );
+        Log log = logService.getInternalLog( BoltKernelExtension.class );
 
         LifeSupport life = new LifeSupport();
 
@@ -140,10 +145,36 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
 
         BoltFactory boltFactory = life.add( new BoltFactoryImpl( api, dependencies.usageData(),
                 logService, dependencies.txBridge(), authentication, dependencies.sessionTracker(), config ) );
-        WorkerFactory workerFactory = life.add( createWorkerFactory( boltFactory, scheduler, dependencies, logService, clock ) );
+        BoltSchedulerProvider boltSchedulerProvider =
+                life.add( new ExecutorBoltSchedulerProvider( config, new CachedThreadPoolExecutorFactory( log ), scheduler, logService ) );
+        BoltConnectionFactory boltConnectionFactory = createConnectionFactory( boltFactory, boltSchedulerProvider, dependencies, logService, clock );
 
-        List<ProtocolInitializer> connectors = config.enabledBoltConnectors().stream()
-                .map( ( connConfig ) ->
+        DefaultBoltProtocolHandlerFactory handlerFactory = createHandlerFactory( boltConnectionFactory, logService );
+
+        if ( !config.enabledBoltConnectors().isEmpty() && !config.get( GraphDatabaseSettings.disconnected ) )
+        {
+            NettyServer server = new NettyServer( scheduler.threadFactory( boltNetworkIO ),
+                    createConnectors( config, sslPolicyFactory, logService, log, handlerFactory ).values() );
+            life.add( server );
+            log.info( "Bolt Server extension loaded." );
+        }
+
+        return life;
+    }
+
+    private BoltConnectionFactory createConnectionFactory( BoltFactory boltFactory, BoltSchedulerProvider schedulerProvider,
+                                                           Dependencies dependencies, LogService logService, Clock clock )
+    {
+        return new DefaultBoltConnectionFactory( boltFactory, schedulerProvider, logService, clock, null,
+                dependencies.monitors() );
+    }
+
+    private Map<BoltConnector,ProtocolInitializer> createConnectors( Config config, SslPolicyLoader sslPolicyFactory,
+                                                                     LogService logService, Log log,
+                                                                     DefaultBoltProtocolHandlerFactory handlerFactory )
+    {
+        Map<BoltConnector,ProtocolInitializer> connectors =
+                config.enabledBoltConnectors().stream().collect( Collectors.toMap( Function.identity(), connConfig ->
                 {
                     ListenSocketAddress listenAddress = config.get( connConfig.listen_address );
                     SslContext sslCtx;
@@ -151,56 +182,41 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
                     final BoltConnector.EncryptionLevel encryptionLevel = config.get( connConfig.encryption_level );
                     switch ( encryptionLevel )
                     {
-                    case REQUIRED:
-                        // Encrypted connections are mandatory, a self-signed certificate may be generated.
-                        requireEncryption = true;
-                        sslCtx = createSslContext( sslPolicyFactory, config );
-                        break;
-                    case OPTIONAL:
-                        // Encrypted connections are optional, a self-signed certificate may be generated.
-                        requireEncryption = false;
-                        sslCtx = createSslContext( sslPolicyFactory, config );
-                        break;
-                    case DISABLED:
-                        // Encryption is turned off, no self-signed certificate will be generated.
-                        requireEncryption = false;
-                        sslCtx = null;
-                        break;
-                    default:
-                        // In the unlikely event that we happen to fall through to the default option here,
-                        // there is a mismatch between the BoltConnector.EncryptionLevel enum and the options
-                        // handled in this switch statement. In this case, we'll log a warning and default to
-                        // disabling encryption, since this mirrors the functionality introduced in 3.0.
-                        log.warn( format( "Unhandled encryption level %s - assuming DISABLED.", encryptionLevel.name() ) );
-                        requireEncryption = false;
-                        sslCtx = null;
-                        break;
+                        case REQUIRED:
+                            // Encrypted connections are mandatory, a self-signed certificate may be generated.
+                            requireEncryption = true;
+                            sslCtx = createSslContext( sslPolicyFactory, config );
+                            break;
+                        case OPTIONAL:
+                            // Encrypted connections are optional, a self-signed certificate may be generated.
+                            requireEncryption = false;
+                            sslCtx = createSslContext( sslPolicyFactory, config );
+                            break;
+                        case DISABLED:
+                            // Encryption is turned off, no self-signed certificate will be generated.
+                            requireEncryption = false;
+                            sslCtx = null;
+                            break;
+                        default:
+                            // In the unlikely event that we happen to fall through to the default option here,
+                            // there is a mismatch between the BoltConnector.EncryptionLevel enum and the options
+                            // handled in this switch statement. In this case, we'll log a warning and default to
+                            // disabling encryption, since this mirrors the functionality introduced in 3.0.
+                            log.warn( format( "Unhandled encryption level %s - assuming DISABLED.", encryptionLevel.name() ) );
+                            requireEncryption = false;
+                            sslCtx = null;
+                            break;
                     }
 
-                    final Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> versions =
-                            newVersions( logService, workerFactory );
-                    return new SocketTransport( listenAddress, sslCtx, requireEncryption, logService.getInternalLogProvider(), versions );
-                } )
-                .collect( toList() );
 
-        if ( connectors.size() > 0 && !config.get( GraphDatabaseSettings.disconnected ) )
-        {
-            life.add( new NettyServer( scheduler.threadFactory( boltNetworkIO ), connectors ) );
-            log.info( "Bolt Server extension loaded." );
-            for ( ProtocolInitializer connector : connectors )
-            {
-                logService.getUserLog( WorkerFactory.class ).info( "Bolt enabled on %s.", connector.address() );
-            }
-        }
+                    /**
+                     * HERE - WHAT SHOULD GO HERE?
+                     */
+                    return new SocketTransport( connConfig.key(), listenAddress, sslCtx, requireEncryption,
+                            logService.getInternalLogProvider(), handlerFactory );
+                } ) );
 
-        return life;
-    }
-
-    protected WorkerFactory createWorkerFactory( BoltFactory boltFactory, JobScheduler scheduler,
-            Dependencies dependencies, LogService logService, Clock clock )
-    {
-        WorkerFactory threadedWorkerFactory = new ThreadedWorkerFactory( boltFactory, scheduler, logService, clock );
-        return new MonitoredWorkerFactory( dependencies.monitors(), threadedWorkerFactory, clock );
+        return connectors;
     }
 
     private SslContext createSslContext( SslPolicyLoader sslPolicyFactory, Config config )
@@ -221,25 +237,13 @@ public class BoltKernelExtension extends KernelExtensionFactory<BoltKernelExtens
         }
     }
 
-    private Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> newVersions(
-            LogService logging, WorkerFactory workerFactory )
-    {
-        Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> availableVersions = new HashMap<>();
-        availableVersions.put(
-                (long) BoltProtocolV1.VERSION,
-                ( channel, isEncrypted ) ->
-                {
-                    BoltConnectionDescriptor descriptor = new BoltConnectionDescriptor(
-                            channel.remoteAddress(), channel.localAddress() );
-                    BoltWorker worker = workerFactory.newWorker( descriptor, channel::close );
-                    return new BoltProtocolV1( worker, channel, logging );
-                }
-        );
-        return availableVersions;
-    }
-
     private Authentication authentication( AuthManager authManager, UserManagerSupplier userManagerSupplier )
     {
         return new BasicAuthentication( authManager, userManagerSupplier );
+    }
+
+    private static DefaultBoltProtocolHandlerFactory createHandlerFactory( BoltConnectionFactory connectionFactory, LogService logService )
+    {
+        return new DefaultBoltProtocolHandlerFactory( connectionFactory, logService );
     }
 }

@@ -103,7 +103,10 @@ public interface Status
                 "The client provided a request that was missing required fields, or had values that are not allowed." ),
         TransactionRequired( ClientError,
                 "The request cannot be performed outside of a transaction, and there is no transaction present to " +
-                "use. Wrap your request in a transaction and retry." );
+                "use. Wrap your request in a transaction and retry." ),
+        NoThreadsAvailable( TransientError,  // TODO: see above
+                "There are no available threads to serve this request at the moment. You can retry at a later time " +
+                        "or consider increasing max pool / queue size for bolt connector(s)." );
         private final Code code;
 
         @Override
@@ -477,7 +480,8 @@ public interface Status
         DatabaseUnavailable( TransientError,
                 "The database is not currently available to serve your request, refer to the database logs for more " +
                 "details. Retrying your request at a later time may succeed." ),
-
+        InvalidUsage( ClientError,  // TODO: see above
+                "The client made a request but did not consume outgoing buffers in a timely fashion." ),
         ;
 
         private final Code code;

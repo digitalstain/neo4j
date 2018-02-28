@@ -44,6 +44,7 @@ import org.neo4j.kernel.configuration.Title;
 import org.neo4j.kernel.configuration.ssl.SslPolicyConfigValidator;
 import org.neo4j.kernel.impl.cache.MonitorGc;
 import org.neo4j.logging.Level;
+import org.neo4j.logging.LogTimeZone;
 
 import static org.neo4j.helpers.collection.Iterables.enumNames;
 import static org.neo4j.kernel.configuration.Settings.ANY;
@@ -627,6 +628,31 @@ public class GraphDatabaseSettings implements LoadableConfig
     @Description("Enable auth requirement to access Neo4j.")
     public static final Setting<Boolean> auth_enabled = setting( "dbms.security.auth_enabled", BOOLEAN, "false" );
 
+    @Description( "The number of threads that will be created upon initialisation to handle standard bolt requests." )
+    @Internal
+    public static final Setting<Integer> bolt_thread_pool_std_core_size =
+            setting( "unsupported.dbms.bolt.thread_pool.std.core_size", INTEGER, "10" );
+
+    @Description( "The maximum number of threads that can serve standard bolt requests. When this limit is reached, upcoming requests will be rejected." )
+    @Internal
+    public static final Setting<Integer> bolt_thread_pool_std_max_size =
+            setting( "unsupported.dbms.bolt.thread_pool.std.max_size", INTEGER, "100" );
+
+    @Description( "The number of threads that will be created upon initialisation to handle out-of-band bolt requests." )
+    @Internal
+    public static final Setting<Integer> bolt_thread_pool_oob_core_size =
+            setting( "unsupported.dbms.bolt.thread_pool.oob.core_size", INTEGER, "1" );
+
+    @Description( "The maximum number of threads that can serve out-of-band bolt requests. When this limit is reached, upcoming requests will be rejected." )
+    @Internal
+    public static final Setting<Integer> bolt_thread_pool_oob_max_size =
+            setting( "unsupported.dbms.bolt.thread_pool.oob.max_size", INTEGER, "10" );
+
+    @Description( "The duration after which an idle thread will be destroyed from the thread pools." )
+    @Internal
+    public static final Setting<Duration> bolt_thread_pool_keep_live =
+            setting( "unsupported.dbms.bolt.thread_pool.keep_live", DURATION, "1m" );
+
     @Internal
     public static final Setting<File> auth_store =
             pathSetting( "unsupported.dbms.security.auth_store.location", NO_DEFAULT );
@@ -656,6 +682,18 @@ public class GraphDatabaseSettings implements LoadableConfig
     public static final Setting<String> procedure_whitelist =
             setting( "dbms.security.procedures.whitelist", Settings.STRING, "*" );
     // Bolt Settings
+
+    @Internal
+    public static final Setting<File> bolt_log_filename = derivedSetting( "unsupported.dbms.logs.bolt.path",
+            GraphDatabaseSettings.logs_directory, logsDir -> new File( logsDir, "bolt.log" ), PATH );
+
+    @Description( "Database timezone." )
+    public static final Setting<LogTimeZone> db_timezone =
+            setting( "dbms.db.timezone", options( LogTimeZone.class ), LogTimeZone.UTC.name() );
+
+    @Internal
+    public static final Setting<Boolean> bolt_logging_enabled = setting( "unsupported.dbms.logs.bolt.enabled",
+            BOOLEAN, FALSE );
 
     @Description("Default network interface to listen for incoming connections. " +
             "To listen for connections on all interfaces, use \"0.0.0.0\". " +

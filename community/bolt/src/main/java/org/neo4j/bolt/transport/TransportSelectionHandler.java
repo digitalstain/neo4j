@@ -19,6 +19,10 @@
  */
 package org.neo4j.bolt.transport;
 
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -31,10 +35,6 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslHandler;
 
-import java.util.List;
-import java.util.Map;
-import java.util.function.BiFunction;
-
 import org.neo4j.logging.LogProvider;
 
 import static org.neo4j.bolt.transport.ProtocolChooser.BOLT_MAGIC_PREAMBLE;
@@ -45,15 +45,17 @@ public class TransportSelectionHandler extends ByteToMessageDecoder
     private static final int MAX_WEBSOCKET_HANDSHAKE_SIZE = 65536;
     private static final int MAX_WEBSOCKET_FRAME_SIZE = 65536;
 
+    private final String connector;
     private final SslContext sslCtx;
     private final boolean encryptionRequired;
     private final boolean isEncrypted;
     private final LogProvider logging;
     private final Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> protocolVersions;
 
-    TransportSelectionHandler( SslContext sslCtx, boolean encryptionRequired, boolean isEncrypted, LogProvider logging,
+    TransportSelectionHandler( String connector, SslContext sslCtx, boolean encryptionRequired, boolean isEncrypted, LogProvider logging,
                                Map<Long, BiFunction<Channel, Boolean, BoltProtocol>> protocolVersions )
     {
+        this.connector = connector;
         this.sslCtx = sslCtx;
         this.encryptionRequired = encryptionRequired;
         this.isEncrypted = isEncrypted;
@@ -116,7 +118,7 @@ public class TransportSelectionHandler extends ByteToMessageDecoder
     {
         ChannelPipeline p = ctx.pipeline();
         p.addLast( sslCtx.newHandler( ctx.alloc() ) );
-        p.addLast( new TransportSelectionHandler( null, encryptionRequired, true, logging, protocolVersions ) );
+        p.addLast( new TransportSelectionHandler( connector, null, encryptionRequired, true, logging, protocolVersions ) );
         p.remove( this );
     }
 

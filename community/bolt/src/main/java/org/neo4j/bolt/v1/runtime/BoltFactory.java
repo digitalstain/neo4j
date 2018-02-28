@@ -30,9 +30,8 @@ public interface BoltFactory
      * Generate a new state machine.
      *
      * @param connectionDescriptor description of the connection (for logging purposes)
-     * @param onClose callback to call on shutdown of the state machine
      * @param clock used to keep track of execution times
      * @return new {@link BoltStateMachine} instance
      */
-    BoltStateMachine newMachine( BoltConnectionDescriptor connectionDescriptor, Runnable onClose, Clock clock );
+    BoltStateMachine newMachine( BoltConnectionDescriptor connectionDescriptor, Clock clock );
 }

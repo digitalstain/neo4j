@@ -19,14 +19,14 @@
  */
 package org.neo4j.test.matchers;
 
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
-import org.hamcrest.TypeSafeMatcher;
-
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeMatcher;
 
 import org.neo4j.helpers.Exceptions;
 
@@ -36,6 +36,11 @@ public final class CommonMatchers
 {
     private CommonMatchers()
     {
+    }
+
+    public static Matcher<Throwable> matchesExceptionMessage( Matcher<? super String> matcher )
+    {
+        return new ExceptionMessageMatcher( matcher );
     }
 
     /**

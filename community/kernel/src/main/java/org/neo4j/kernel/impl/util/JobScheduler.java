@@ -154,6 +154,11 @@ public interface JobScheduler extends Lifecycle
         public static final Group boltNetworkIO = new Group( "BoltNetworkIO", NEW_THREAD );
 
         /**
+         * Rotates bolt message logs
+         */
+        public static final Group boltLogRotation = new Group( "BoltLogRotation", POOLED );
+
+        /**
          * Reporting thread for Metrics events
          */
         public static final Group metricsEvent = new Group( "MetricsEvent", POOLED );
@@ -194,6 +199,11 @@ public interface JobScheduler extends Lifecycle
         public static Group transactionTimeoutMonitor = new Group( "TransactionTimeoutMonitor", POOLED );
 
         public static Group pageCacheIOHelper = new Group( "PageCacheIOHelper", POOLED );
+
+        /**
+         * Bolt scheduler worker
+         */
+        public static Group boltWorker = new Group( "BoltWorker", POOLED );
     }
 
     interface JobHandle

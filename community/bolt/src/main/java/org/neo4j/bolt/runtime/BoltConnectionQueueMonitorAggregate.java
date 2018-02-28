@@ -17,39 +17,33 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.bolt.v1.runtime;
+package org.neo4j.bolt.runtime;
 
-public class SynchronousBoltWorker implements BoltWorker
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+
+import org.neo4j.bolt.v1.runtime.Job;
+
+public class BoltConnectionQueueMonitorAggregate implements BoltConnectionQueueMonitor
 {
-    private final BoltStateMachine machine;
+    private final List<BoltConnectionQueueMonitor> monitors;
 
-    public SynchronousBoltWorker( BoltStateMachine machine )
+    public BoltConnectionQueueMonitorAggregate( BoltConnectionQueueMonitor... monitors )
     {
-        this.machine = machine;
+        this.monitors = new ArrayList<>( Arrays.asList( monitors ) );
     }
 
     @Override
-    public void enqueue( Job job )
+    public void enqueued( BoltConnection to, Job job )
     {
-        try
-        {
-            job.perform( machine );
-        }
-        catch ( BoltConnectionFatality connectionFatality )
-        {
-            throw new RuntimeException( connectionFatality );
-        }
+        monitors.forEach( m -> m.enqueued( to, job ) );
     }
 
     @Override
-    public void interrupt()
+    public void drained( BoltConnection from, Collection<Job> batch )
     {
-        machine.interrupt();
-    }
-
-    @Override
-    public void halt()
-    {
-        machine.close();
+        monitors.forEach( m -> m.drained( from, batch ) );
     }
 }

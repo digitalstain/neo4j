@@ -436,7 +436,7 @@ public class BoltStateMachineTest
 
     @SuppressWarnings( "unchecked" )
     @Test
-    public void shouldTerminateOnAuthExpiryDuringSTREAMING() throws Throwable
+    public void shouldTerminateOnAuthExpiryDuringSTREAMINGPullAll() throws Throwable
     {
         // Given
         BoltResponseHandler responseHandler = mock( BoltResponseHandler.class );
@@ -449,6 +449,19 @@ public class BoltStateMachineTest
         // When & Then
         assertException( () -> machine.pullAll( responseHandler ),
                 BoltConnectionAuthFatality.class, "Auth expired!" );
+    }
+
+    @SuppressWarnings( "unchecked" )
+    @Test
+    public void shouldTerminateOnAuthExpiryDuringSTREAMINGDiscardAll() throws Throwable
+    {
+        // Given
+        BoltResponseHandler responseHandler = mock( BoltResponseHandler.class );
+        doThrow( new AuthorizationExpiredException( "Auth expired!" ) ).when( responseHandler )
+                .onRecords( any(), anyBoolean() );
+        BoltStateMachine machine = newMachine( STREAMING );
+        // We assume the only implementation of statement processor is TransactionStateMachine
+        ((TransactionStateMachine) machine.statementProcessor()).ctx.currentResult = BoltResult.EMPTY;
 
         // When & Then
         assertException( () -> machine.discardAll( responseHandler ),
@@ -481,7 +494,7 @@ public class BoltStateMachineTest
     {
         // Given
         BoltStateMachineSPI spi = mock( BoltStateMachineSPI.class, RETURNS_MOCKS );
-        final BoltStateMachine machine = new BoltStateMachine( spi, null, Clock.systemUTC() );
+        final BoltStateMachine machine = new BoltStateMachine( spi, null, Clock.systemUTC(), NullLogService.getInstance() );
 
         // When
         machine.close();
