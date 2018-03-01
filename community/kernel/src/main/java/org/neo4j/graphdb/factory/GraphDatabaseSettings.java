@@ -628,31 +628,6 @@ public class GraphDatabaseSettings implements LoadableConfig
     @Description("Enable auth requirement to access Neo4j.")
     public static final Setting<Boolean> auth_enabled = setting( "dbms.security.auth_enabled", BOOLEAN, "false" );
 
-    @Description( "The number of threads that will be created upon initialisation to handle standard bolt requests." )
-    @Internal
-    public static final Setting<Integer> bolt_thread_pool_std_core_size =
-            setting( "unsupported.dbms.bolt.thread_pool.std.core_size", INTEGER, "10" );
-
-    @Description( "The maximum number of threads that can serve standard bolt requests. When this limit is reached, upcoming requests will be rejected." )
-    @Internal
-    public static final Setting<Integer> bolt_thread_pool_std_max_size =
-            setting( "unsupported.dbms.bolt.thread_pool.std.max_size", INTEGER, "100" );
-
-    @Description( "The number of threads that will be created upon initialisation to handle out-of-band bolt requests." )
-    @Internal
-    public static final Setting<Integer> bolt_thread_pool_oob_core_size =
-            setting( "unsupported.dbms.bolt.thread_pool.oob.core_size", INTEGER, "1" );
-
-    @Description( "The maximum number of threads that can serve out-of-band bolt requests. When this limit is reached, upcoming requests will be rejected." )
-    @Internal
-    public static final Setting<Integer> bolt_thread_pool_oob_max_size =
-            setting( "unsupported.dbms.bolt.thread_pool.oob.max_size", INTEGER, "10" );
-
-    @Description( "The duration after which an idle thread will be destroyed from the thread pools." )
-    @Internal
-    public static final Setting<Duration> bolt_thread_pool_keep_live =
-            setting( "unsupported.dbms.bolt.thread_pool.keep_live", DURATION, "1m" );
-
     @Internal
     public static final Setting<File> auth_store =
             pathSetting( "unsupported.dbms.security.auth_store.location", NO_DEFAULT );
