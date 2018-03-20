@@ -21,16 +21,22 @@ package org.neo4j.causalclustering.backup;
 
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.IntFunction;
 
 import org.neo4j.backup.OnlineBackupSettings;
-import org.neo4j.causalclustering.core.CoreGraphDatabase;
+import org.neo4j.causalclustering.backup.backup_stores.BackupStore;
+import org.neo4j.causalclustering.backup.backup_stores.BackupStoreWithSomeData;
+import org.neo4j.causalclustering.backup.backup_stores.BackupStoreWithSomeDataButNoTransactionLogs;
+import org.neo4j.causalclustering.backup.backup_stores.EmptyBackupStore;
+import org.neo4j.causalclustering.backup.backup_stores.NoStore;
 import org.neo4j.causalclustering.discovery.Cluster;
 import org.neo4j.causalclustering.discovery.CoreClusterMember;
 import org.neo4j.causalclustering.discovery.IpFamily;
@@ -44,16 +50,33 @@ import org.neo4j.test.rule.fs.DefaultFileSystemRule;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
-import static org.neo4j.backup.OnlineBackupCommandIT.runBackupToolFromOtherJvmToGetExitCode;
-import static org.neo4j.causalclustering.backup.BackupCoreIT.backupAddress;
 import static org.neo4j.causalclustering.discovery.Cluster.dataMatchesEventually;
-import static org.neo4j.causalclustering.helpers.DataCreator.createEmptyNodes;
+import static org.neo4j.causalclustering.helpers.BackupUtil.restoreFromBackup;
 
+@RunWith( Parameterized.class )
 public class ClusterSeedingIT
 {
     private Cluster backupCluster;
     private Cluster cluster;
     private FileSystemAbstraction fsa;
+    private FileCopyDetector fileCopyDetector;
+
+    @Parameterized.Parameters( name = "{0}" )
+    public static Object[][] data() throws Exception
+    {
+        return new Object[][]{
+                {new NoStore(), true },
+                {new EmptyBackupStore(), false },
+                {new BackupStoreWithSomeData(), false },
+                {new BackupStoreWithSomeDataButNoTransactionLogs(), false }
+        };
+    }
+
+    @Parameterized.Parameter()
+    public BackupStore initialStore;
+
+    @Parameterized.Parameter( 1 )
+    public boolean shouldStoreCopy;
 
     @Rule
     public TestDirectory testDir = TestDirectory.testDirectory();
@@ -63,6 +86,7 @@ public class ClusterSeedingIT
     @Before
     public void setup() throws Exception
     {
+        this.fileCopyDetector = new FileCopyDetector();
         fsa = fileSystemRule.get();
         backupCluster = new Cluster( testDir.directory( "cluster-for-backup" ), 3, 0,
                 new SharedDiscoveryService(), emptyMap(), backupParams(), emptyMap(), emptyMap(), Standard
@@ -95,101 +119,33 @@ public class ClusterSeedingIT
         }
     }
 
-    private File createBackupUsingAnotherCluster() throws Exception
+    @Test
+    public void shouldSeedNewCluster() throws Exception
     {
+        // given
         backupCluster.start();
-        CoreGraphDatabase db = BackupCoreIT.createSomeData( backupCluster );
-
-        File backup = createBackup( db, "some-backup" );
+        Optional<File> backup = initialStore.generate( baseBackupDir, backupCluster );
         backupCluster.shutdown();
 
-        return backup;
-    }
+        if ( backup.isPresent() )
+        {
+            for ( CoreClusterMember coreClusterMember : cluster.coreMembers() )
+            {
+                restoreFromBackup( backup.get(), fsa, coreClusterMember );
+            }
+        }
 
-    private File createBackup( CoreGraphDatabase db, String backupName ) throws Exception
-    {
-        String[] args = BackupCoreIT.backupArguments( backupAddress( db ), baseBackupDir, backupName );
-        assertEquals( 0, runBackupToolFromOtherJvmToGetExitCode( testDir.absolutePath(), args ) );
-        return new File( baseBackupDir, backupName );
-    }
-
-    @Test
-    public void shouldRestoreBySeedingAllMembers() throws Throwable
-    {
-        // given
-        File backupDir = createBackupUsingAnotherCluster();
-        DbRepresentation before = DbRepresentation.of( backupDir );
+        // we want the cluster to seed from backup. No instance should delete and re-copy the store.
+        cluster.coreMembers().forEach( ccm -> ccm.monitors().addMonitorListener( fileCopyDetector ) );
 
         // when
-        fsa.copyRecursively( backupDir, cluster.getCoreMemberById( 0 ).storeDir() );
-        fsa.copyRecursively( backupDir, cluster.getCoreMemberById( 1 ).storeDir() );
-        fsa.copyRecursively( backupDir, cluster.getCoreMemberById( 2 ).storeDir() );
-
         cluster.start();
 
         // then
-        dataMatchesEventually( before, cluster.coreMembers() );
-    }
-
-    @Test
-    public void shouldSeedNewMemberFromEmptyIdleCluster() throws Throwable
-    {
-        // given
-        cluster = new Cluster( testDir.directory( "cluster-b" ), 3, 0,
-                new SharedDiscoveryService(), emptyMap(), backupParams(), emptyMap(), emptyMap(), Standard
-                .LATEST_NAME, IpFamily.IPV4, false );
-        cluster.start();
-
-        // when: creating a backup
-        File backupDir = createBackup( cluster.getCoreMemberById( 0 ).database(), "the-backup" );
-
-        // and: seeding new member with said backup
-        CoreClusterMember newMember = cluster.addCoreMemberWithId( 3 );
-        fsa.copyRecursively( backupDir, newMember.storeDir() );
-        newMember.start();
-
-        // then
-        dataMatchesEventually( DbRepresentation.of( newMember.database() ), cluster.coreMembers() );
-    }
-
-    @Test
-    public void shouldSeedNewMemberFromNonEmptyIdleCluster() throws Throwable
-    {
-        // given
-        cluster = new Cluster( testDir.directory( "cluster-b" ), 3, 0,
-                new SharedDiscoveryService(), emptyMap(), backupParams(), emptyMap(), emptyMap(), Standard
-                .LATEST_NAME, IpFamily.IPV4, false );
-        cluster.start();
-        createEmptyNodes( cluster, 100 );
-
-        // when: creating a backup
-        File backupDir = createBackup( cluster.getCoreMemberById( 0 ).database(), "the-backup" );
-
-        // and: seeding new member with said backup
-        CoreClusterMember newMember = cluster.addCoreMemberWithId( 3 );
-        fsa.copyRecursively( backupDir, newMember.storeDir() );
-        newMember.start();
-
-        // then
-        dataMatchesEventually( DbRepresentation.of( newMember.database() ), cluster.coreMembers() );
-    }
-
-    @Test
-    @Ignore( "need to seed all members for now" )
-    public void shouldRestoreBySeedingSingleMember() throws Throwable
-    {
-        // given
-        File backupDir = createBackupUsingAnotherCluster();
-        DbRepresentation before = DbRepresentation.of( backupDir );
-
-        // when
-        fsa.copyRecursively( backupDir, cluster.getCoreMemberById( 0 ).storeDir() );
-        cluster.getCoreMemberById( 0 ).start();
-        Thread.sleep( 2_000 );
-        cluster.getCoreMemberById( 1 ).start();
-        cluster.getCoreMemberById( 2 ).start();
-
-        // then
-        dataMatchesEventually( before, cluster.coreMembers() );
+        if ( backup.isPresent() )
+        {
+            dataMatchesEventually( DbRepresentation.of( backup.get() ), cluster.coreMembers() );
+        }
+        assertEquals( shouldStoreCopy, fileCopyDetector.hasDetectedAnyFileCopied() );
     }
 }

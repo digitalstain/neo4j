@@ -52,6 +52,7 @@ public class DelegatingPageCache implements PageCache
         return delegate.listExistingMappings();
     }
 
+    @Override
     public int pageSize()
     {
         return delegate.pageSize();

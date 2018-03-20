@@ -17,20 +17,21 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.causalclustering.messaging.monitoring;
+package org.neo4j.causalclustering.backup.cluster_load;
 
-import org.neo4j.helpers.AdvertisedSocketAddress;
+import org.neo4j.causalclustering.discovery.Cluster;
 
-public interface MessageQueueMonitor
+public class NoLoad implements ClusterLoad
 {
-    Long droppedMessages();
+    @Override
+    public void start(Cluster cluster)
+    {
+        // do nothing
+    }
 
-    void droppedMessage( AdvertisedSocketAddress destination );
-
-    void queueSize( AdvertisedSocketAddress destination, long size );
-
-    Long queueSizes();
-
-    void register( AdvertisedSocketAddress to );
+    @Override
+    public void stop()
+    {
+        // do nothing
+    }
 }
-

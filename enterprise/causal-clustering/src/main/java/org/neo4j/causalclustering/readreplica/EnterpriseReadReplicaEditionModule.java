@@ -193,7 +193,7 @@ public class EnterpriseReadReplicaEditionModule extends EditionModule
 
         TopologyService topologyService = discoveryServiceFactory.topologyService( config, clusterSslPolicy,
                 logProvider, platformModule.jobScheduler, myself,
-                        hostnameResolver, resolveStrategy( config ) );
+                        hostnameResolver, resolveStrategy( config, logProvider ) );
 
         life.add( dependencies.satisfyDependency( topologyService ) );
 
@@ -212,7 +212,8 @@ public class EnterpriseReadReplicaEditionModule extends EditionModule
         int maxBatchSize = config.get( CausalClusteringSettings.read_replica_transaction_applier_batch_size );
         BatchingTxApplier batchingTxApplier = new BatchingTxApplier(
                 maxBatchSize, dependencies.provideDependency( TransactionIdStore.class ), writableCommitProcess,
-                platformModule.monitors, platformModule.tracers.pageCursorTracerSupplier, logProvider );
+                platformModule.monitors, platformModule.tracers.pageCursorTracerSupplier,
+                platformModule.versionContextSupplier, logProvider );
 
         TimerService timerService = new TimerService( platformModule.jobScheduler, logProvider );
 
@@ -227,7 +228,7 @@ public class EnterpriseReadReplicaEditionModule extends EditionModule
                 new RemoteStore( platformModule.logging.getInternalLogProvider(), fileSystem, platformModule.pageCache,
                         new StoreCopyClient( catchUpClient, logProvider ),
                         new TxPullClient( catchUpClient, platformModule.monitors ), new TransactionLogCatchUpFactory(),
-                        platformModule.monitors );
+                        platformModule.monitors, localDatabase );
 
         CopiedStoreRecovery copiedStoreRecovery =
                 new CopiedStoreRecovery( config, platformModule.kernelExtensions.listFactories(),
@@ -385,12 +386,12 @@ public class EnterpriseReadReplicaEditionModule extends EditionModule
         }
     }
 
-    private static TopologyServiceRetryStrategy resolveStrategy( Config config )
+    private static TopologyServiceRetryStrategy resolveStrategy( Config config, LogProvider logProvider )
     {
         long refreshPeriodMillis = config.get( CausalClusteringSettings.cluster_topology_refresh ).toMillis();
         int pollingFrequencyWithinRefreshWindow = 2;
         int numberOfRetries =
                 pollingFrequencyWithinRefreshWindow + 1; // we want to have more retries at the given frequency than there is time in a refresh period
-        return new TopologyServiceMultiRetryStrategy( refreshPeriodMillis / pollingFrequencyWithinRefreshWindow, numberOfRetries );
+        return new TopologyServiceMultiRetryStrategy( refreshPeriodMillis / pollingFrequencyWithinRefreshWindow, numberOfRetries, logProvider );
     }
 }

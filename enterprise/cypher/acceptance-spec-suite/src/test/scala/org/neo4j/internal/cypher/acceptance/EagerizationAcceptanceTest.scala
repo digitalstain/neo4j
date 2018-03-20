@@ -26,7 +26,7 @@ import org.neo4j.cypher.internal.compiler.v3_2.test_helpers.CreateTempFileTestSu
 import org.neo4j.cypher.{ExecutionEngineFunSuite, NewPlannerTestSupport, QueryStatisticsTestSupport}
 import org.neo4j.graphdb.{Direction, Node}
 import org.neo4j.kernel.api.exceptions.ProcedureException
-import org.neo4j.kernel.api.proc
+import org.neo4j.kernel.api.{ResourceTracker, proc}
 import org.neo4j.kernel.api.proc.CallableProcedure.BasicProcedure
 import org.neo4j.kernel.api.proc.{Context, Neo4jTypes}
 import org.neo4j.kernel.impl.api.RelationshipVisitor
@@ -180,7 +180,8 @@ class EagerizationAcceptanceTest
       builder.out("relId", Neo4jTypes.NTInteger)
       builder.mode(Mode.WRITE)
       new BasicProcedure(builder.build) {
-        override def apply(ctx: Context, input: Array[AnyRef]): RawIterator[Array[AnyRef], ProcedureException] = {
+        override def apply(ctx: Context, input: Array[AnyRef],
+                           resourceTracker: ResourceTracker): RawIterator[Array[AnyRef], ProcedureException] = {
           val transaction = ctx.get(proc.Context.KERNEL_TRANSACTION)
           val statement = transaction.acquireStatement()
           try {
@@ -217,7 +218,8 @@ class EagerizationAcceptanceTest
       builder.out(org.neo4j.kernel.api.proc.ProcedureSignature.VOID)
       builder.mode(Mode.WRITE)
       new BasicProcedure(builder.build) {
-        override def apply(ctx: Context, input: Array[AnyRef]): RawIterator[Array[AnyRef], ProcedureException] = {
+        override def apply(ctx: Context, input: Array[AnyRef],
+                           resourceTracker: ResourceTracker): RawIterator[Array[AnyRef], ProcedureException] = {
           val transaction = ctx.get(proc.Context.KERNEL_TRANSACTION)
           val statement = transaction.acquireStatement()
           try {
@@ -253,7 +255,8 @@ class EagerizationAcceptanceTest
       builder.in("y", Neo4jTypes.NTNode)
       builder.out("relId", Neo4jTypes.NTInteger)
       new BasicProcedure(builder.build) {
-        override def apply(ctx: Context, input: Array[AnyRef]): RawIterator[Array[AnyRef], ProcedureException] = {
+        override def apply(ctx: Context, input: Array[AnyRef],
+                           resourceTracker: ResourceTracker): RawIterator[Array[AnyRef], ProcedureException] = {
           val transaction = ctx.get(proc.Context.KERNEL_TRANSACTION)
           val statement = transaction.acquireStatement()
           try {
@@ -301,7 +304,8 @@ class EagerizationAcceptanceTest
       builder.in("y", Neo4jTypes.NTNode)
       builder.out(org.neo4j.kernel.api.proc.ProcedureSignature.VOID)
       new BasicProcedure(builder.build) {
-        override def apply(ctx: Context, input: Array[AnyRef]): RawIterator[Array[AnyRef], ProcedureException] = {
+        override def apply(ctx: Context, input: Array[AnyRef],
+                           resourceTracker: ResourceTracker): RawIterator[Array[AnyRef], ProcedureException] = {
           val transaction = ctx.get(proc.Context.KERNEL_TRANSACTION)
           val statement = transaction.acquireStatement()
           try {
@@ -2712,6 +2716,41 @@ class EagerizationAcceptanceTest
                                     Map("labels(n)" -> List(), "labels(m)" -> List())))
     assertStats(result, labelsRemoved = 2)
     assertNumberOfEagerness(query, 1)
+  }
+
+  test("merge and pattern comprehension readwrite conflict requires eager") {
+    val query =
+      """
+        |CREATE (node)
+        |WITH node
+        |UNWIND [{ value: 'apples' }, { value: 'oranges' }] as tags
+        |MERGE (tag { value: tags.value})
+        |MERGE (node)-[:HAS_TAG {relProp1: 'relProp1', relProp2: 'relProp2'}]->(tag)
+        |WITH DISTINCT node
+        |RETURN [(node)-[:HAS_TAG {relProp1: 'relProp1', relProp2: 'relProp2'}]->(t) | t.value] as tags
+      """.stripMargin
+
+    val result = executeWithCostPlannerAndInterpretedRuntimeOnly(query)
+    result.toList should equal(List(Map("tags" -> List("apples", "oranges"))))
+    assertNumberOfEagerness(query, 1)
+  }
+
+  test("merge and optional match readwrite conflict requires eager") {
+    val query =
+      """
+        |CREATE (node:Node {id: 'xyzzy'})
+        |WITH node
+        |UNWIND [{ value: 'apples' }, { value: 'oranges' }] as tags
+        |MERGE (tag:Tag { value: tags.value})
+        |MERGE (node)-[:HAS_TAG]->(tag)
+        |WITH DISTINCT node
+        |OPTIONAL MATCH (node)-[:HAS_TAG]->(t:Tag)
+        |RETURN COLLECT(t.value) as tags
+      """.stripMargin
+
+    val result = executeWithCostPlannerAndInterpretedRuntimeOnly(query)
+    result.toList should equal(List(Map("tags" -> Vector("apples", "oranges"))))
+    assertNumberOfEagerness(query, 2)
   }
 
   private def assertNumberOfEagerness(query: String, expectedEagerCount: Int, optimalEagerCount: Int = -1) {

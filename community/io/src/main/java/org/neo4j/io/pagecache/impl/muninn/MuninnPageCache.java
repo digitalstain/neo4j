@@ -52,6 +52,7 @@ import org.neo4j.io.pagecache.tracing.MajorFlushEvent;
 import org.neo4j.io.pagecache.tracing.PageCacheTracer;
 import org.neo4j.io.pagecache.tracing.PageFaultEvent;
 import org.neo4j.io.pagecache.tracing.cursor.PageCursorTracerSupplier;
+import org.neo4j.io.pagecache.tracing.cursor.context.VersionContextSupplier;
 import org.neo4j.unsafe.impl.internal.dragons.MemoryManager;
 import org.neo4j.unsafe.impl.internal.dragons.UnsafeUtil;
 
@@ -199,7 +200,8 @@ public class MuninnPageCache implements PageCache
 
     // 'true' (the default) if we should print any exceptions we get when unmapping a file.
     private boolean printExceptionsOnClose;
-    private PageCursorTracerSupplier pageCursorTracerSupplier;
+    private final PageCursorTracerSupplier pageCursorTracerSupplier;
+    private final VersionContextSupplier versionContextSupplier;
 
     /**
      * Create page cache
@@ -209,9 +211,11 @@ public class MuninnPageCache implements PageCache
      * @param pageCacheTracer global page cache tracer
      * @param pageCursorTracerSupplier supplier of thread local (transaction local) page cursor tracer that will provide
      * thread local page cache statistics
+     * @param versionContextSupplier supplier of thread local (transaction local) version context that will provide
+     * access to thread local version context
      */
     public MuninnPageCache( PageSwapperFactory swapperFactory, int maxPages, int cachePageSize, PageCacheTracer pageCacheTracer,
-            PageCursorTracerSupplier pageCursorTracerSupplier )
+            PageCursorTracerSupplier pageCursorTracerSupplier, VersionContextSupplier versionContextSupplier )
     {
         verifyHacks();
         verifyCachePageSizeIsPowerOfTwo( cachePageSize );
@@ -223,6 +227,7 @@ public class MuninnPageCache implements PageCache
         this.keepFree = Math.min( pagesToKeepFree, maxPages / 2 );
         this.pageCacheTracer = pageCacheTracer;
         this.pageCursorTracerSupplier = pageCursorTracerSupplier;
+        this.versionContextSupplier = versionContextSupplier;
         this.pages = new MuninnPage[maxPages];
         this.printExceptionsOnClose = true;
 
@@ -367,7 +372,7 @@ public class MuninnPageCache implements PageCache
                 file,
                 this,
                 filePageSize,
-                swapperFactory, pageCacheTracer, pageCursorTracerSupplier,
+                swapperFactory, pageCacheTracer, pageCursorTracerSupplier, versionContextSupplier,
                 createIfNotExists,
                 truncateExisting );
         pagedFile.incrementRefCount();
@@ -393,25 +398,6 @@ public class MuninnPageCache implements PageCache
             return Optional.of( pagedFile );
         }
         return Optional.empty();
-    }
-
-    @Override
-    public synchronized List<PagedFile> listExistingMappings() throws IOException
-    {
-        assertHealthy();
-        ensureThreadsInitialised();
-
-        List<PagedFile> list = new ArrayList<>();
-        FileMapping current = mappedFiles;
-
-        while ( current != null )
-        {
-            MuninnPagedFile pagedFile = current.pagedFile;
-            pagedFile.incrementRefCount();
-            list.add( pagedFile );
-            current = current.next;
-        }
-        return list;
     }
 
     private MuninnPagedFile tryGetMappingOrNull( File file ) throws IOException
@@ -492,6 +478,25 @@ public class MuninnPageCache implements PageCache
         {
             throw new FileIsMappedException( file, operation );
         }
+    }
+
+    @Override
+    public synchronized List<PagedFile> listExistingMappings() throws IOException
+    {
+        assertHealthy();
+        ensureThreadsInitialised();
+
+        List<PagedFile> list = new ArrayList<>();
+        FileMapping current = mappedFiles;
+
+        while ( current != null )
+        {
+            MuninnPagedFile pagedFile = current.pagedFile;
+            pagedFile.incrementRefCount();
+            list.add( pagedFile );
+            current = current.next;
+        }
+        return list;
     }
 
     /**
@@ -601,7 +606,7 @@ public class MuninnPageCache implements PageCache
     {
         if ( limiter == null )
         {
-            throw new IllegalArgumentException( "IOPSLimiter cannot be null" );
+            throw new IllegalArgumentException( "IOLimiter cannot be null" );
         }
         List<PagedFile> pagedFiles = listExistingMappings();
 
@@ -1067,7 +1072,6 @@ public class MuninnPageCache implements PageCache
      */
     private boolean evictPage( MuninnPage page, EvictionEvent evictionEvent )
     {
-        //noinspection TryWithIdenticalCatches - this warning is a false positive; bug in Intellij inspection
         try
         {
             page.evict( evictionEvent );

@@ -74,7 +74,7 @@ case class LogicalPlan2PlanDescription(idMap: Map[LogicalPlan, Id], readOnly: Bo
 
       case DirectedRelationshipByIdSeek(_, relIds, _, _, _) =>
         val entityByIdRhs = EntityByIdRhs(relIds.asCommandSeekArgs)
-        PlanDescriptionImpl(id, "DirectedRelationshipByIdSeekPipe", NoChildren, Seq(entityByIdRhs), variables)
+        PlanDescriptionImpl(id, "DirectedRelationshipByIdSeek", NoChildren, Seq(entityByIdRhs), variables)
 
       case _: LegacyNodeIndexSeek | _: LegacyRelationshipIndexSeek =>
         PlanDescriptionImpl(id, "LegacyIndexSeek", NoChildren, Seq.empty, variables)
@@ -380,14 +380,18 @@ case class LogicalPlan2PlanDescription(idMap: Map[LogicalPlan, Id], readOnly: Bo
                 PrefixIndex(label.name, propertyKey, prefix)
 
               case InequalitySeekRangeExpression(RangeLessThan(bounds)) =>
-                InequalityIndex(label.name, propertyKey, bounds.map(bound => s"<${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq)
+                InequalityIndex(label.name, propertyKey,
+                  bounds.map(bound => s"<${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq)
 
               case InequalitySeekRangeExpression(RangeGreaterThan(bounds)) =>
-                InequalityIndex(label.name, propertyKey, bounds.map(bound => s">${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq)
+                InequalityIndex(label.name, propertyKey,
+                  bounds.map(bound => s">${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq)
 
               case InequalitySeekRangeExpression(RangeBetween(greaterThanBounds, lessThanBounds)) =>
-                val greaterThanBoundsText = greaterThanBounds.bounds.map(bound => s">${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq
-                val lessThanBoundsText = lessThanBounds.bounds.map(bound => s"<${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq
+                val greaterThanBoundsText = greaterThanBounds.bounds.map(bound =>
+                  s">${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq
+                val lessThanBoundsText = lessThanBounds.bounds.map(bound =>
+                  s"<${bound.inequalitySignSuffix} ${bound.endPoint}").toIndexedSeq
                 InequalityIndex(label.name, propertyKey, greaterThanBoundsText ++ lessThanBoundsText)
             }
 

@@ -681,7 +681,7 @@ public abstract class CommonAbstractStore<RECORD extends AbstractBaseRecord,HEAD
      */
     void openIdGenerator()
     {
-        idGenerator = idGeneratorFactory.open( getIdFileName(), getIdType(), () -> scanForHighId(), recordFormat.getMaxId() );
+        idGenerator = idGeneratorFactory.open( getIdFileName(), getIdType(), this::scanForHighId, recordFormat.getMaxId() );
     }
 
     /**
@@ -696,74 +696,73 @@ public abstract class CommonAbstractStore<RECORD extends AbstractBaseRecord,HEAD
     {
         try ( PageCursor cursor = storeFile.io( 0, PF_SHARED_READ_LOCK ) )
         {
-            byte[] expectedLegacyVersionBytes = UTF8.encode( typeDescriptor + " " + storeVersion );
-            long nextPageId = storeFile.getLastPageId();
             int recordsPerPage = getRecordsPerPage();
             int recordSize = getRecordSize();
             long highestId = getNumberOfReservedLowIds();
+            boolean found;
             /*
              * We do this in chunks of pages instead of one page at a time, the performance impact is significant.
-             * We first prefetch a chunk of pages and then proceed to scan them backwards. The backwards scan is as
-             * expensive as the forwards, prefetching ensures that everything is in memory anyway, and we also allow
-             * for exiting as soon as we find the first used record - a forward scan would require exhausting the chunk.
+             * We first pre-fetch a large chunk sequentially, which is then scanned backwards for used records.
              */
             final long chunkSizeInPages = 256; // 2MiB (8192 bytes/page * 256 pages/chunk)
-            long currentChunkEnd = nextPageId;
-            long currentChunkStart =
-                    max( currentChunkEnd - chunkSizeInPages, 0 ); // Either chunkSize or whatever is remaining
-            while ( currentChunkEnd >= 0 )
+
+            long chunkEndId = storeFile.getLastPageId();
+            while ( chunkEndId >= 0 )
             {
-                // Prefetching step - just loop through all the pages in the current chunk
-                for ( long currentPageId = currentChunkStart; currentPageId <= currentChunkEnd; currentPageId++ )
+                // Do pre-fetch of the chunk
+                long chunkStartId = max( chunkEndId - chunkSizeInPages, 0 );
+                preFetchChunk( cursor, chunkStartId, chunkEndId );
+
+                // Scan pages backwards in the chunk
+                for ( long currentId = chunkEndId; currentId >= chunkStartId && cursor.next( currentId ); currentId-- )
                 {
-                    cursor.next( currentPageId );
-                }
-                nextPageId = currentChunkEnd;
-                while ( nextPageId >= currentChunkStart && cursor.next( nextPageId ) )
-                {
-                    nextPageId--;
-                    boolean found;
                     do
                     {
                         found = false;
-                        int currentRecord = recordsPerPage;
-                        while ( currentRecord-- > 0 )
+                        // Scan record backwards in the page
+                        for ( int offset = recordsPerPage * recordSize - recordSize; offset >= 0; offset -= recordSize )
                         {
-                            int offset = currentRecord * recordSize;
                             cursor.setOffset( offset );
-                            long recordId = (cursor.getCurrentPageId() * recordsPerPage) + currentRecord;
-                            if ( isInUse( cursor ) )
+                            if ( isInUse( cursor ) && !isJustLegacyStoreTrailer( cursor, offset, recordSize ) )
                             {
-                                boolean justLegacyStoreTrailer = isJustLegacyStoreTrailer( cursor, offset,
-                                        expectedLegacyVersionBytes, recordSize );
-                                if ( !justLegacyStoreTrailer )
-                                {
-                                    // We've found the highest id in use
-                                    highestId = recordId + 1 /*+1 since we return the high id*/;
-                                    found = true;
-                                    break;
-                                }
+                                // We've found the highest id in use
+                                highestId = (cursor.getCurrentPageId() * recordsPerPage) + offset / recordSize + 1;
+                                found = true;
+                                break;
                             }
                         }
                     }
                     while ( cursor.shouldRetry() );
+
                     checkIdScanCursorBounds( cursor );
                     if ( found )
                     {
                         return highestId;
                     }
                 }
-                currentChunkEnd = currentChunkStart - 1;
-                currentChunkStart =
-                        max( currentChunkEnd - chunkSizeInPages, 0 );
+                chunkEndId = chunkStartId - 1;
             }
 
             return getNumberOfReservedLowIds();
         }
         catch ( IOException e )
         {
-            throw new UnderlyingStorageException(
-                    "Unable to find high id by scanning backwards " + getStorageFileName(), e );
+            throw new UnderlyingStorageException( "Unable to find high id by scanning backwards " + getStorageFileName(), e );
+        }
+    }
+
+    /**
+     * Do a pre-fetch of pages in sequential order on the range [{@code pageIdStart},{@code pageIdEnd}].
+     *
+     * @param cursor Cursor to pre-fetch on.
+     * @param pageIdStart Page id to start pre-fetching from.
+     * @param pageIdEnd Page id to end pre-fetching on, inclusive {@code pageIdEnd}.
+     */
+    private static void preFetchChunk( PageCursor cursor, long pageIdStart, long pageIdEnd ) throws IOException
+    {
+        for ( long currentPageId = pageIdStart; currentPageId <= pageIdEnd; currentPageId++ )
+        {
+            cursor.next( currentPageId );
         }
     }
 
@@ -782,14 +781,13 @@ public abstract class CommonAbstractStore<RECORD extends AbstractBaseRecord,HEAD
      *
      * @param cursor {@link PageCursor} to read and compare trailer bytes with.
      * @param offset offset to start reading the record bytes from the cursor.
-     * @param expectedVersionBytes the whole version trailer as a {@code byte[]}.
      * @param recordSize record size of records in this store.
      * @return {@code true} if the record at the offset was just a version trailer "record", otherwise
      * {@code false} where the id of this record will be set as the highest inUse record in this store.
      */
-    private boolean isJustLegacyStoreTrailer( PageCursor cursor, int offset, byte[] expectedVersionBytes,
-            int recordSize )
+    private boolean isJustLegacyStoreTrailer( PageCursor cursor, int offset, int recordSize )
     {
+        byte[] expectedVersionBytes = UTF8.encode( typeDescriptor + " " + storeVersion );
         try
         {
             for ( int i = 0; i < expectedVersionBytes.length; )

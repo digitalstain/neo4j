@@ -33,6 +33,7 @@ import org.neo4j.io.pagecache.impl.muninn.StandalonePageCacheFactory;
 import org.neo4j.io.pagecache.tracing.PageCacheTracer;
 import org.neo4j.io.pagecache.tracing.cursor.DefaultPageCursorTracerSupplier;
 import org.neo4j.io.pagecache.tracing.cursor.PageCursorTracerSupplier;
+import org.neo4j.io.pagecache.tracing.cursor.context.EmptyVersionContextSupplier;
 
 public class PageCacheRule extends ExternalResource
 {
@@ -171,7 +172,8 @@ public class PageCacheRule extends ExternalResource
         pageCache = StandalonePageCacheFactory.createPageCache( fs,
                 selectConfig( baseConfig.pageSize, overriddenConfig.pageSize, null ),
                 selectConfig( baseConfig.tracer, overriddenConfig.tracer, PageCacheTracer.NULL ),
-                selectConfig( baseConfig.pageCursorTracerSupplier, overriddenConfig.pageCursorTracerSupplier, DefaultPageCursorTracerSupplier.INSTANCE ));
+                selectConfig( baseConfig.pageCursorTracerSupplier, overriddenConfig.pageCursorTracerSupplier,
+                        DefaultPageCursorTracerSupplier.INSTANCE ), EmptyVersionContextSupplier.INSTANCE );
         pageCachePostConstruct( overriddenConfig );
         return pageCache;
     }
@@ -231,11 +233,11 @@ public class PageCacheRule extends ExternalResource
         }
     }
 
-    private static class AtomicBooleanInconsistentReadAdversary implements Adversary
+    public static class AtomicBooleanInconsistentReadAdversary implements Adversary
     {
         final AtomicBoolean nextReadIsInconsistent;
 
-        AtomicBooleanInconsistentReadAdversary( AtomicBoolean nextReadIsInconsistent )
+        public AtomicBooleanInconsistentReadAdversary( AtomicBoolean nextReadIsInconsistent )
         {
             this.nextReadIsInconsistent = nextReadIsInconsistent;
         }

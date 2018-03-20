@@ -19,11 +19,11 @@
  */
 package org.neo4j.bolt;
 
+import java.util.function.Consumer;
+
 import org.junit.After;
 import org.junit.Rule;
 import org.junit.Test;
-
-import java.util.function.Consumer;
 
 import org.neo4j.bolt.runtime.BoltConnectionMetricsMonitor;
 import org.neo4j.driver.v1.Config;

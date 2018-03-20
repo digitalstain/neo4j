@@ -218,7 +218,7 @@ object ClauseConverters {
             selections = selections,
             patternNodes = patternContent.nodeIds.toSet,
             patternRelationships = patternContent.rels.toSet,
-            hints = clause.hints.toSet,
+            hints = clause.hints,
             shortestPathPatterns = patternContent.shortestPaths.toSet
           ))
         }
@@ -322,6 +322,8 @@ object ClauseConverters {
 
         val pos = pattern.position
 
+        val selections = asSelections(clause.where)
+
         val hasLabels = nodes.flatMap(n =>
           n.labels.map(l => HasLabels(Variable(n.nodeName.name)(pos), Seq(l))(pos))
         )
@@ -335,7 +337,7 @@ object ClauseConverters {
           patternNodes = nodes.map(_.nodeName).toSet,
           patternRelationships = rels.map(r => PatternRelationship(r.relName, (r.leftNode, r.rightNode),
             r.direction, Seq(r.relType), SimplePatternLength)).toSet,
-          selections = Selections.from(hasLabels ++ hasProps),
+          selections = selections ++ Selections.from(hasLabels ++ hasProps),
           argumentIds = builder.currentlyAvailableVariables ++ nodesCreatedBefore.map(_.nodeName)
         )
 
@@ -474,12 +476,12 @@ object ClauseConverters {
         ))
 
       // REMOVE rel.prop when unknown whether node or rel
-      case (builder, RemovePropertyItem(Property(variable: Variable, propertyKey))) =>
+      case (builder, RemovePropertyItem(Property(variable, propertyKey))) =>
         builder.amendQueryGraph(_.addMutatingPatterns(
           SetPropertyPattern(variable, propertyKey, Null()(propertyKey.position))
         ))
 
-      case (builder, other) =>
+      case (_, other) =>
         throw new InternalException(s"REMOVE $other not supported in cost planner yet")
     }
   }
