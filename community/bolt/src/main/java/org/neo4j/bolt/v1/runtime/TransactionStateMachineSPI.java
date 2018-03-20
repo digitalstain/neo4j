@@ -147,13 +147,13 @@ class TransactionStateMachineSPI implements TransactionStateMachine.SPI
                 }
                 catch ( KernelException e )
                 {
-                    transactionalContext.close( false );
+                    close( false );
                     onFail.apply();
                     throw new QueryExecutionKernelException( e );
                 }
                 catch ( Throwable e )
                 {
-                    transactionalContext.close( false );
+                    close( false );
                     onFail.apply();
                     throw e;
                 }

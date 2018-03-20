@@ -75,6 +75,12 @@ public class ExecutorBoltScheduler implements BoltScheduler, BoltConnectionLifet
         return activeWorkItems.containsKey( connection.id() );
     }
 
+    @Override
+    public String connector()
+    {
+        return connector;
+    }
+
     public void start()
     {
         threadPool = executorFactory.create( corePoolSize, maxPoolSize, keepAlive, queueSize,
@@ -85,14 +91,18 @@ public class ExecutorBoltScheduler implements BoltScheduler, BoltConnectionLifet
     {
         if ( threadPool != null )
         {
-            executorFactory.destroy( threadPool );
+            activeConnections.values().forEach( this::stopConnection );
+
+            threadPool.shutdown();
         }
     }
 
     @Override
     public void created( BoltConnection connection )
     {
-        activeConnections.put( connection.id(), connection );
+        BoltConnection previous = activeConnections.put( connection.id(), connection );
+        // We do not expect the same (keyed) connection twice
+        assert previous == null;
     }
 
     @Override
@@ -102,7 +112,7 @@ public class ExecutorBoltScheduler implements BoltScheduler, BoltConnectionLifet
 
         try
         {
-            CompletableFuture currentFuture = activeWorkItems.remove( id );
+            CompletableFuture<Boolean> currentFuture = activeWorkItems.remove( id );
             if ( currentFuture != null )
             {
                 currentFuture.cancel( true );
@@ -144,7 +154,7 @@ public class ExecutorBoltScheduler implements BoltScheduler, BoltConnectionLifet
     {
         Thread currentThread = Thread.currentThread();
         String originalName = currentThread.getName();
-        String newName = String.format( "%s [%s] ", originalName, connection.remoteAddress(), connector );
+        String newName = String.format( "%s [%s] ", originalName, connection.remoteAddress() );
 
         currentThread.setName( newName );
         try
@@ -157,7 +167,7 @@ public class ExecutorBoltScheduler implements BoltScheduler, BoltConnectionLifet
         }
     }
 
-    private void handleCompletion( BoltConnection connection, Object shouldContinueScheduling, Throwable error )
+    private void handleCompletion( BoltConnection connection, Boolean shouldContinueScheduling, Throwable error )
     {
         CompletableFuture<Boolean> previousFuture = activeWorkItems.remove( connection.id() );
 
@@ -170,15 +180,27 @@ public class ExecutorBoltScheduler implements BoltScheduler, BoltConnectionLifet
             else
             {
                 log.error( String.format( "Unexpected error during job scheduling for session '%s'.", connection.id() ), error );
-                connection.stop();
+                stopConnection( connection );
             }
         }
         else
         {
-            if ( (Boolean)shouldContinueScheduling && connection.hasPendingJobs() )
+            if ( shouldContinueScheduling && connection.hasPendingJobs() )
             {
-                previousFuture.thenAcceptAsync( ignore -> handleSubmission( connection ), forkJoinPool );
+                handleSubmission( connection );
             }
+        }
+    }
+
+    private void stopConnection( BoltConnection connection )
+    {
+        try
+        {
+            connection.stop();
+        }
+        catch ( Throwable t )
+        {
+            log.warn( String.format( "An unexpected error occurred while stopping BoltConnection [%s]", connection.id() ), t );
         }
     }
 

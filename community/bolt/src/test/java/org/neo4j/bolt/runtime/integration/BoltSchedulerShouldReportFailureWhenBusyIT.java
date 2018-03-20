@@ -31,6 +31,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -43,6 +44,7 @@ import org.neo4j.bolt.v1.transport.socket.client.SocketConnection;
 import org.neo4j.bolt.v1.transport.socket.client.TransportConnection;
 import org.neo4j.bolt.v1.transport.socket.client.WebSocketConnection;
 import org.neo4j.function.Factory;
+import org.neo4j.function.Predicates;
 import org.neo4j.graphdb.factory.GraphDatabaseSettings;
 import org.neo4j.helpers.HostnamePort;
 import org.neo4j.helpers.collection.MapUtil;
@@ -55,6 +57,7 @@ import org.neo4j.test.rule.fs.EphemeralFileSystemRule;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyMap;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.isA;
 import static org.hamcrest.CoreMatchers.startsWith;
@@ -133,6 +136,8 @@ public class BoltSchedulerShouldReportFailureWhenBusyIT
     @Test
     public void shouldReportFailureWhenAllThreadsInThreadPoolAreBusy() throws Exception
     {
+        AtomicInteger updateCounter = new AtomicInteger();
+
         TransportConnection connection1 = performHandshake( cf.newInstance() );
         TransportConnection connection2 = performHandshake( cf.newInstance() );
         TransportConnection connection3 = performHandshake( cf.newInstance() );
@@ -141,14 +146,13 @@ public class BoltSchedulerShouldReportFailureWhenBusyIT
         // Generate a Lock
         createNode( connection1, 100 );
         // Start update request
-        updateNode( connection1, 100, 101 );
+        updateNode( connection1, 100, 101, updateCounter );
 
         // Try to update the same node, these two lines will block all available threads
-        Future<Integer> result1 = spawnedUpdate1.execute( state -> updateNodeNoThrow( connection2, 100, 101 ) );
-        Future<Integer> result2 = spawnedUpdate2.execute( state -> updateNodeNoThrow( connection3, 100, 101 ) );
+        Future<Integer> result1 = spawnedUpdate1.execute( state -> updateNodeNoThrow( connection2, 100, 101, updateCounter ) );
+        Future<Integer> result2 = spawnedUpdate2.execute( state -> updateNodeNoThrow( connection3, 100, 101, updateCounter ) );
 
-        spawnedUpdate1.get().awaitStartExecuting();
-        spawnedUpdate2.get().awaitStartExecuting();
+        Predicates.await( () -> updateCounter.get() > 2, 1, MINUTES );
 
         connection4.send( TransportTestUtil.chunk( run( "RETURN 1" ), pullAll() ) );
         assertThat( connection4,
@@ -179,19 +183,21 @@ public class BoltSchedulerShouldReportFailureWhenBusyIT
         assertThat( connection, TransportTestUtil.eventuallyReceives( msgSuccess(), msgSuccess(), msgSuccess(), msgSuccess(), msgSuccess(), msgSuccess() ) );
     }
 
-    private void updateNode( TransportConnection connection, int oldId, int newId ) throws Exception
+    private void updateNode( TransportConnection connection, int oldId, int newId, AtomicInteger updateCounter ) throws Exception
     {
         connection.send( TransportTestUtil.chunk( run( "BEGIN" ), pullAll(),
                 run( "MATCH (n { id: {oldId} }) SET n.id = {newId}", MapUtil.map( "oldId", oldId, "newId", newId ) ), pullAll() ) );
 
+        updateCounter.incrementAndGet();
+
         assertThat( connection, TransportTestUtil.eventuallyReceives( msgSuccess(), msgSuccess(), msgSuccess(), msgSuccess() ) );
     }
 
-    private int updateNodeNoThrow( TransportConnection connection, int oldId, int newId )
+    private int updateNodeNoThrow( TransportConnection connection, int oldId, int newId, AtomicInteger updateCounter )
     {
         try
         {
-            updateNode( connection, oldId, newId );
+            updateNode( connection, oldId, newId, updateCounter );
         }
         catch ( Throwable t )
         {

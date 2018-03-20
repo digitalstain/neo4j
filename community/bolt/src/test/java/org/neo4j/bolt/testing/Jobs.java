@@ -17,33 +17,23 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.neo4j.bolt.runtime;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
+package org.neo4j.bolt.testing;
 
 import org.neo4j.bolt.v1.runtime.Job;
 
-public class BoltConnectionQueueMonitorAggregate implements BoltConnectionQueueMonitor
+public class Jobs
 {
-    private final List<BoltConnectionQueueMonitor> monitors;
 
-    public BoltConnectionQueueMonitorAggregate( BoltConnectionQueueMonitor... monitors )
+    private Jobs()
     {
-        this.monitors = Arrays.asList( monitors );
+
     }
 
-    @Override
-    public void enqueued( BoltConnection to, Job job )
+    public static Job noop()
     {
-        monitors.forEach( m -> m.enqueued( to, job ) );
-    }
+        return machine ->
+        {
 
-    @Override
-    public void drained( BoltConnection from, Collection<Job> batch )
-    {
-        monitors.forEach( m -> m.drained( from, batch ) );
+        };
     }
 }
