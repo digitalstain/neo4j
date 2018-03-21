@@ -19,19 +19,20 @@
  */
 package org.neo4j.bolt.v1.transport.integration;
 
+import java.util.Collection;
+import java.util.Map;
+import java.util.function.Consumer;
+
 import org.apache.commons.lang.StringUtils;
 import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.RuleChain;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-
-import java.util.Collection;
-import java.util.Map;
-import java.util.function.Consumer;
 
 import org.neo4j.bolt.v1.runtime.BoltChannelAutoReadLimiter;
 import org.neo4j.bolt.v1.transport.socket.client.SecureSocketConnection;
@@ -69,6 +70,7 @@ import static org.neo4j.bolt.v1.transport.integration.TransportTestUtil.eventual
 import static org.neo4j.kernel.api.proc.ProcedureSignature.procedureSignature;
 
 @RunWith( Parameterized.class )
+@Ignore
 public class BoltChannelAutoReadLimiterIT
 {
     private AssertableLogProvider logProvider;

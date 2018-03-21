@@ -19,15 +19,15 @@
  */
 package org.neo4j.commandline.dbms;
 
-import org.junit.Rule;
-import org.junit.Test;
-
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.junit.Rule;
+import org.junit.Test;
 
 import org.neo4j.commandline.admin.CommandLocator;
 import org.neo4j.commandline.admin.IncorrectUsage;
@@ -243,9 +243,9 @@ public class ImportCommandTest
                             "  --id-type=<STRING|INTEGER|ACTUAL>%n" +
                             "      Each node must provide a unique id. This is used to find the correct nodes%n" +
                             "      when creating relationships. Possible values are:%n" +
-                            "        STRING: arbitrary strings for identifying nodes,%n" +
-                            "        INTEGER: arbitrary integer values for identifying nodes,%n" +
-                            "        ACTUAL: (advanced) actual node ids.%n" +
+                            "      STRING: arbitrary strings for identifying nodes,%n" +
+                            "      INTEGER: arbitrary integer values for identifying nodes,%n" +
+                            "      ACTUAL: (advanced) actual node ids.%n" +
                             "      For more information on id handling, please see the Neo4j Manual:%n" +
                             "      https://neo4j.com/docs/operations-manual/current/tools/import/%n" +
                             "      [default:STRING]%n" +

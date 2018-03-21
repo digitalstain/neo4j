@@ -19,12 +19,12 @@
  */
 package org.neo4j.kernel.impl.api.integrationtest;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-
-import java.util.HashSet;
-import java.util.Set;
 
 import org.neo4j.collection.RawIterator;
 import org.neo4j.graphdb.Transaction;
@@ -156,7 +156,10 @@ public class BuiltInProceduresIT extends KernelIntegrationTest
                 equalTo(new Object[]{"db.createRelationshipType",
                         "db.createRelationshipType(newRelationshipType :: STRING?) :: VOID",
                         "Create a RelationshipType"
-                })
+                }),
+                equalTo( new Object[]{"db.ericsson.clearIndexCaches",
+                        "db.ericsson.clearIndexCaches() :: VOID", "Clear all index reader caches"
+                } )
         ) );
     }
 
