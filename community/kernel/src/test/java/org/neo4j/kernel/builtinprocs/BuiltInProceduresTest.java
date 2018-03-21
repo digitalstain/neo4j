@@ -226,7 +226,9 @@ public class BuiltInProceduresTest
                 record( "dbms.queryJmx",
                         "dbms.queryJmx(query :: STRING?) :: (name :: STRING?, description :: STRING?, attributes :: " +
                         "MAP?)",
-                        "Query JMX management data by domain and name. For instance, \"org.neo4j:*\"" )
+                        "Query JMX management data by domain and name. For instance, \"org.neo4j:*\"" ),
+                record( "db.ericsson.clearIndexCaches", "db.ericsson.clearIndexCaches() :: VOID",
+                        "Clear all index reader caches" )
         ) );
     }
 

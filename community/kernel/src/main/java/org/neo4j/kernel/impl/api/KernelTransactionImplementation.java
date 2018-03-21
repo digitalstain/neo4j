@@ -218,6 +218,11 @@ public class KernelTransactionImplementation implements KernelTransaction, TxSta
         return this;
     }
 
+    public void forceCleanupIndexReaders()
+    {
+        storageStatement.forceCleanupIndexReaders();
+    }
+
     int getReuseCount()
     {
         return reuseCount;

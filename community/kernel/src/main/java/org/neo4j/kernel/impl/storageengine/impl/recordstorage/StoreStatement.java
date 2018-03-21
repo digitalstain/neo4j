@@ -44,6 +44,8 @@ import org.neo4j.kernel.impl.store.RelationshipStore;
 import org.neo4j.kernel.impl.store.StoreType;
 import org.neo4j.kernel.impl.store.record.RelationshipGroupRecord;
 import org.neo4j.kernel.impl.util.InstanceCache;
+import org.neo4j.logging.Log;
+import org.neo4j.logging.LogProvider;
 import org.neo4j.storageengine.api.Direction;
 import org.neo4j.storageengine.api.NodeItem;
 import org.neo4j.storageengine.api.PropertyItem;
@@ -81,10 +83,11 @@ public class StoreStatement implements StorageStatement
 
     private boolean acquired;
     private boolean closed;
+    private final Log log;
 
     public StoreStatement( NeoStores neoStores, Supplier<IndexReaderFactory> indexReaderFactory,
             Supplier<LabelScanReader> labelScanReaderSupplier, LockService lockService,
-            RecordStorageCommandCreationContext commandCreationContext )
+            RecordStorageCommandCreationContext commandCreationContext, LogProvider logProvider )
     {
         this.neoStores = neoStores;
         this.indexReaderFactorySupplier = indexReaderFactory;
@@ -147,6 +150,8 @@ public class StoreStatement implements StorageStatement
                 return new StorePropertyCursor( recordCursors, this );
             }
         };
+
+        log = logProvider.getLog( StoreStatement.class );
     }
 
     @Override
@@ -155,6 +160,20 @@ public class StoreStatement implements StorageStatement
         assert !closed;
         assert !acquired;
         this.acquired = true;
+        if ( indexReaderFactory != null && indexReaderFactory.hasCachedValues() )
+        {
+            log.warn( "Ericsson probe: StorageStatement still have cached index readers, this should not happen" );
+        }
+    }
+
+    @Override
+    public void forceCleanupIndexReaders()
+    {
+        if ( indexReaderFactory != null )
+        {
+            int num = indexReaderFactory.cleanUp();
+            log.warn( "Ericsson probe: Removed " + num + " cached readers" );
+        }
     }
 
     @Override

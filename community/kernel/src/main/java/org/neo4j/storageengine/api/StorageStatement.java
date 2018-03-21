@@ -175,4 +175,9 @@ public interface StorageStatement extends AutoCloseable
      * @return a reserved relationship id for future use.
      */
     long reserveRelationship();
+
+    /**
+     * Experiment for Ericcson. Should invalidate all the cached index readers to rule out caching issues.
+     */
+    void forceCleanupIndexReaders();
 }

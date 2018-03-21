@@ -198,6 +198,11 @@ public class KernelTransactions extends LifecycleAdapter implements Supplier<Ker
             .collect( toSet() );
     }
 
+    public void forceCleanupIndexReaders()
+    {
+        allTransactions.forEach( KernelTransactionImplementation::forceCleanupIndexReaders );
+    }
+
     /**
      * Dispose of all pooled transactions. This is done on shutdown or on internal events (like an HA mode switch) that
      * require transactions to be re-created.

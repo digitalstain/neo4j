@@ -19,8 +19,8 @@
  */
 package org.neo4j.kernel.impl.api;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.neo4j.kernel.api.exceptions.index.IndexNotFoundKernelException;
 import org.neo4j.kernel.api.schema.index.IndexDescriptor;
@@ -35,6 +35,10 @@ public interface IndexReaderFactory
     IndexReader newUnCachedReader( IndexDescriptor descriptor ) throws IndexNotFoundKernelException;
 
     void close();
+
+    boolean hasCachedValues();
+
+    int cleanUp();
 
     class Caching implements IndexReaderFactory
     {
@@ -51,7 +55,7 @@ public interface IndexReaderFactory
         {
             if ( indexReaders == null )
             {
-                indexReaders = new HashMap<>();
+                indexReaders = new ConcurrentHashMap<>();
             }
 
             IndexReader reader = indexReaders.get( descriptor );
@@ -81,6 +85,28 @@ public interface IndexReaderFactory
                 }
                 indexReaders.clear();
             }
+        }
+
+        @Override
+        public boolean hasCachedValues()
+        {
+            return indexReaders != null && !indexReaders.isEmpty();
+        }
+
+        @Override
+        public int cleanUp()
+        {
+            int num = 0;
+            if ( indexReaders != null )
+            {
+                num = indexReaders.size();
+                for ( IndexReader indexReader : indexReaders.values() )
+                {
+                    indexReader.close();
+                }
+                indexReaders.clear();
+            }
+            return num;
         }
     }
 }

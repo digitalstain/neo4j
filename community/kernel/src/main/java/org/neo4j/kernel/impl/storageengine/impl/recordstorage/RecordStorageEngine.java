@@ -209,7 +209,7 @@ public class RecordStorageEngine implements StorageEngine, Lifecycle
             cacheAccess = new BridgingCacheAccess( schemaCache, schemaStateChangeCallback,
                     propertyKeyTokenHolder, relationshipTypeTokens, labelTokens );
 
-            storeStatementSupplier = storeStatementSupplier( neoStores );
+            storeStatementSupplier = storeStatementSupplier( neoStores, logProvider );
             storeLayer = new StorageLayer(
                     propertyKeyTokenHolder, labelTokens, relationshipTypeTokens,
                     schemaStorage, neoStores, indexingService,
@@ -232,13 +232,13 @@ public class RecordStorageEngine implements StorageEngine, Lifecycle
         }
     }
 
-    private Supplier<StorageStatement> storeStatementSupplier( NeoStores neoStores )
+    private Supplier<StorageStatement> storeStatementSupplier( NeoStores neoStores, LogProvider logProvider )
     {
         Supplier<IndexReaderFactory> indexReaderFactory = () -> new IndexReaderFactory.Caching( indexingService );
         LockService lockService = takePropertyReadLocks ? this.lockService : NO_LOCK_SERVICE;
 
         return () -> new StoreStatement( neoStores, indexReaderFactory, labelScanStore::newReader, lockService,
-                allocateCommandCreationContext() );
+                allocateCommandCreationContext(), logProvider );
     }
 
     @Override
